@@ -1,0 +1,41 @@
+name: agrisense
+description: Application mobile de prédiction de rendements agricoles — AgriSense
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation
+  go_router: ^13.2.4
+
+  # HTTP
+  http: ^1.2.1
+
+  # Stockage sécurisé (JWT)
+  flutter_secure_storage: ^9.0.0
+
+  # Carte
+  google_maps_flutter: ^2.6.1
+
+  # Géolocalisation
+  geolocator: ^11.0.0
+
+  # Graphiques
+  fl_chart: ^0.67.0
+
+  # Icônes
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
