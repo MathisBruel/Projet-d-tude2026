@@ -1,0 +1,124 @@
+@startuml sequence_carte
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam sequenceMessageAlign center
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam ParticipantPadding 20
+
+skinparam participant {
+    BackgroundColor #ECEFF1
+    BorderColor #455A64
+}
+skinparam actor {
+    BackgroundColor #C8E6C9
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+title AgriSense — Diagramme de Séquence : Carte Interactive\n(Chargement parcelles + Ajout de parcelle)
+
+actor "Agriculteur" as farmer
+participant "Flutter App\n(MapScreen)" as flutter
+participant "Google Maps\nSDK Flutter" as gmaps_sdk
+participant "Flask API\n/api/v1/parcels" as api
+participant "weather_service.py" as weather_svc
+participant "Open-Meteo API" as openmeteo
+database "MongoDB\nparcels" as mongo
+
+== Chargement de la carte ==
+
+farmer -> flutter : Ouvre l'écran Carte
+activate flutter
+
+flutter -> gmaps_sdk : GoogleMap(initialCameraPosition\n= position France)\nchargement des tuiles
+activate gmaps_sdk
+gmaps_sdk --> flutter : Carte rendue (tiles chargées)
+deactivate gmaps_sdk
+
+flutter -> api : GET /api/v1/parcels\nAuthorization: Bearer <JWT>
+activate api
+
+api -> mongo : db.parcels.find({ user_id })\n.project({ name, coordinates,\ncenter, culture_type, area_ha })
+activate mongo
+mongo --> api : [ parcel1, parcel2, ... ]
+deactivate mongo
+
+api --> flutter : 200 OK\n{ data: [ { _id, name, coordinates,\ncenter, culture_type, area_ha } ] }
+deactivate api
+
+flutter -> gmaps_sdk : Dessine polygones\n(Polygon overlay par parcelle)\n+ Markers centraux
+activate gmaps_sdk
+gmaps_sdk --> flutter : Polygones affichés\n(couleur par culture_type)
+deactivate gmaps_sdk
+flutter --> farmer : Carte avec ses parcelles visibles
+deactivate flutter
+
+== Tap sur une parcelle ==
+
+farmer -> flutter : Tape sur un marker / polygone
+activate flutter
+flutter -> flutter : Affiche BottomSheet :\n  📍 Nom de la parcelle\n  🌾 Culture : Blé\n  📐 Surface : 12.5 ha
+
+flutter -> api : GET /api/v1/weather\n?lat={center.lat}&lng={center.lng}
+activate api
+
+api -> weather_svc : get_current_weather(lat, lng)
+activate weather_svc
+weather_svc -> openmeteo : GET /v1/forecast\n?latitude=&longitude=\n&current=temperature_2m,\nprecipitation,wind_speed_10m,\nrelative_humidity_2m
+activate openmeteo
+openmeteo --> weather_svc : 200 OK { current: { ... } }
+deactivate openmeteo
+weather_svc --> api : { temp: 18°C, rain: 2mm,\nhumidity: 65%, wind: 12km/h }
+deactivate weather_svc
+
+api --> flutter : 200 OK { weather: { ... } }
+deactivate api
+
+flutter -> flutter : Enrichit le BottomSheet :\n  🌡️ 18°C | 💧 2mm\n  💨 12 km/h | 65% humidité
+flutter -> flutter : Bouton "Lancer une prédiction"
+flutter --> farmer : Info parcelle + météo locale
+deactivate flutter
+
+== Ajout d'une nouvelle parcelle ==
+
+farmer -> flutter : Appuie sur FAB "+ Parcelle"
+activate flutter
+flutter -> flutter : Affiche DrawParcelScreen\n(mode dessin activé)
+
+farmer -> flutter : Tape plusieurs points\nsur la carte pour\ndessiner le polygone
+activate flutter
+flutter -> gmaps_sdk : Dessine polyline temps réel\n(points en cours de saisie)
+activate gmaps_sdk
+gmaps_sdk --> flutter : Aperçu visuel du polygone
+deactivate gmaps_sdk
+
+farmer -> flutter : Confirme la parcelle\n(nom, type de culture, type de sol)
+
+flutter -> flutter : Calcule l'aire approximative\n(formule Shoelace sur les coords GPS)
+
+flutter -> api : POST /api/v1/parcels\nAuth: Bearer <JWT>\n{\n  name: "Parcelle Nord",\n  culture_type: "Blé tendre",\n  soil_type: "Limon argileux",\n  area_ha: 8.3,\n  coordinates: [ {lat,lng}, ... ],\n  center: { lat, lng }\n}
+activate api
+
+api -> mongo : db.parcels.insert_one(parcel_doc)
+activate mongo
+mongo --> api : inserted_id
+deactivate mongo
+
+api --> flutter : 201 Created\n{ data: { _id, name, ... } }
+deactivate api
+
+flutter -> gmaps_sdk : Ajoute le nouveau polygone\nà la carte + marker
+activate gmaps_sdk
+gmaps_sdk --> flutter : Polygone affiché
+deactivate gmaps_sdk
+
+flutter --> farmer : Snackbar "Parcelle ajoutée ✓"\n+ zoom sur la nouvelle parcelle
+deactivate flutter
+
+@enduml

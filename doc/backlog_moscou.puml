@@ -1,0 +1,99 @@
+@startwbs backlog_moscou
+<style>
+wbsDiagram {
+  BackgroundColor #FAFAFA
+  FontName "Segoe UI"
+  FontSize 11
+
+  .must {
+    BackgroundColor #C8E6C9
+    LineColor #2E7D32
+    FontColor #1B5E20
+    FontStyle bold
+  }
+  .should {
+    BackgroundColor #BBDEFB
+    LineColor #1565C0
+    FontColor #0D47A1
+  }
+  .could {
+    BackgroundColor #FFF9C4
+    LineColor #F9A825
+    FontColor #E65100
+  }
+  .wont {
+    BackgroundColor #FFCDD2
+    LineColor #C62828
+    FontColor #B71C1C
+  }
+  .epic {
+    BackgroundColor #37474F
+    LineColor #263238
+    FontColor #FFFFFF
+    FontStyle bold
+  }
+  .day {
+    BackgroundColor #546E7A
+    LineColor #37474F
+    FontColor #FFFFFF
+    FontStyle bold
+  }
+}
+</style>
+
+title AgriSense — Backlog Produit & Priorisation MoSCoW\nSprint unique : Lundi a Mercredi | Soutenance Jeudi matin
+
++ AgriSense — Backlog Sprint 3 jours <<epic>>
+
+++ MUST — A livrer imperativement <<must>>
+
++++ JOUR 1 — Lundi <<day>>
+++++ [M1] Setup projet : Git, Docker Compose, Flutter init, Flask init <<must>>
+++++ [M2] Connexion MongoDB + modeles de donnees (users, parcels, predictions) <<must>>
+++++ [M3] Auth : POST /register + POST /login + middleware JWT <<must>>
+++++ [M4] Flutter : Ecrans Login et Register + navigation de base <<must>>
+++++ [M5] Flutter : BottomNavigationBar (Dashboard / Carte / Prediction / Communaute) <<must>>
+
++++ JOUR 2 — Mardi <<day>>
+++++ [M6] GET /parcels — liste des parcelles de l utilisateur <<must>>
+++++ [M7] GET /weather — proxy Open-Meteo (meteo par lat/lng) <<must>>
+++++ [M8] POST /predictions — orchestration weather + NASA POWER + Gemini <<must>>
+++++ [M9] Flutter : DashboardScreen (meteo temps reel, alertes, historique) <<must>>
+++++ [M10] Flutter : PredictionScreen (formulaire + affichage resultat IA) <<must>>
+++++ [M11] Flutter : MapScreen (Google Maps + polygones parcelles) <<must>>
+
++++ JOUR 3 — Mercredi matin <<day>>
+++++ [M12] POST /parcels + DELETE /parcels/:id — ajout et suppression <<must>>
+++++ [M13] Flutter : dessin parcelle sur carte (tap points -> polygone) <<must>>
+++++ [M14] Docker build final + deploiement Azure Container Apps <<must>>
+++++ [M15] Tests end-to-end + corrections bugs critiques <<must>>
+
+++ SHOULD — Fortement souhaite <<should>>
+
++++ JOUR 2 si avance <<day>>
+++++ [S1] GET/POST /admin/users — liste + desactivation comptes <<should>>
+++++ [S2] Flutter : AdminScreen back-office basique <<should>>
+
++++ JOUR 3 — Mercredi apres-midi <<day>>
+++++ [S3] Alertes automatiques si rendement predit inferieur au seuil <<should>>
+++++ [S4] Historique des predictions par parcelle (liste + graphique) <<should>>
+++++ [S5] Donnees sol NASA POWER integrees dans le prompt Gemini <<should>>
+++++ [S6] Polish UI : theme vert agricole, animations, transitions <<should>>
+
+++ COULD — Si le temps le permet <<could>>
+
++++ JOUR 3 fin de journee <<day>>
+++++ [C1] GET/POST /community/posts — liste et creation de posts <<could>>
+++++ [C2] POST /community/posts/:id/replies — reponses aux posts <<could>>
+++++ [C3] Flutter : CommunityScreen forum basique <<could>>
+++++ [C4] Notifications push locales alertes meteo <<could>>
+++++ [C5] Export PDF du rapport de prediction <<could>>
+
+++ WONT — Hors perimetre sprint <<wont>>
++++ [W1] Modele ML custom scikit-learn ou TensorFlow — trop long <<wont>>
++++ [W2] Capteurs IoT physiques — materiel non disponible <<wont>>
++++ [W3] Kubernetes — seul Mathis maitrise, Docker suffit pour la demo <<wont>>
++++ [W4] Application web responsive — mobile uniquement <<wont>>
++++ [W5] Systeme de paiement ou abonnement — hors sujet pedagogique <<wont>>
+
+@endwbs

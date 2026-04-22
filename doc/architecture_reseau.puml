@@ -1,0 +1,101 @@
+@startuml architecture_reseau
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam padding 8
+skinparam roundcorner 12
+skinparam shadowing false
+
+title AgriSense — Architecture Réseau & Infrastructure\n(Livrable CDC — schéma réseau simplifié)
+
+' ===================== COUCHE CAPTEURS / DONNÉES =====================
+package "Couche Capteurs & Données Externes" #E8F5E9 {
+    node "Open-Meteo API\n(Météo temps réel)" as openmeteo #A5D6A7
+    node "NASA POWER API\n(Sol & Rayonnement)" as nasa #A5D6A7
+    node "Capteurs IoT simulés\n(script de génération)" as iot #C8E6C9
+}
+
+' ===================== COUCHE RÉSEAU / INTERNET =====================
+cloud "Internet / HTTPS\n(TLS 1.3)" as internet #E3F2FD
+
+' ===================== COUCHE CLOUD AZURE =====================
+package "Azure Cloud — Azure Container Apps" #E3F2FD {
+
+    node "Azure Container Registry\n(image Docker)" as acr #90CAF9
+
+    package "Virtual Network (VNet)" #BBDEFB {
+
+        node "AgriSense API\n[Flask / Python]\nDocker Container\nPort 5000" as api #1565C0 {
+        }
+
+        node "MongoDB Atlas\n(service managé)\nPort 27017" as mongo #1976D2
+
+        node "Ingress Controller\n(HTTPS — port 443)" as ingress #42A5F5
+    }
+}
+
+' ===================== COUCHE IA EXTERNE =====================
+package "Services IA & Cartographie" #FFF3E0 {
+    node "Gemini API\n(Google AI Studio)" as gemini #FFCC80
+    node "Google Maps API\n(Tuiles + Géocodage)" as gmaps #FFB74D
+}
+
+' ===================== COUCHE UTILISATEURS =====================
+package "Utilisateurs Finaux" #F3E5F5 {
+    actor "Agriculteur\n(Smartphone)" as farmer #CE93D8
+    actor "Technicien Agronome\n(Tablet / Mobile)" as agro #CE93D8
+    actor "Administrateur\n(Mobile / Web)" as admin_user #CE93D8
+
+    node "Application Flutter\n(Android / iOS)" as flutter #AB47BC
+}
+
+' ===================== FLUX =====================
+openmeteo -[#4CAF50,thickness=2]-> internet : HTTPS GET
+nasa -[#4CAF50,thickness=2]-> internet : HTTPS GET
+iot -[#4CAF50,dashed]-> internet : HTTPS POST (simulé)
+
+internet -[#2196F3,thickness=2]-> ingress : HTTPS :443
+
+ingress -[#1565C0,thickness=2]-> api : HTTP interne :5000
+api -[#1565C0,thickness=2]-> mongo : TCP :27017 (VNet interne)
+api -[#FF9800,thickness=2]-> gemini : HTTPS + API Key
+api -[#2196F3,thickness=1]-> openmeteo : HTTPS (proxy météo)
+api -[#2196F3,thickness=1]-> nasa : HTTPS (proxy sol)
+
+acr -[#90CAF9,dashed]-> api : Pull image Docker
+
+farmer --> flutter
+agro --> flutter
+admin_user --> flutter
+
+flutter -[#9C27B0,thickness=2]-> internet : HTTPS REST /api/v1/
+flutter -[#FF9800,thickness=1]-> gmaps : SDK Maps
+
+note right of api
+  Endpoints REST :
+  POST /api/v1/auth/login
+  POST /api/v1/auth/register
+  GET  /api/v1/parcels
+  POST /api/v1/predictions
+  GET  /api/v1/weather/:lat/:lng
+  GET  /api/v1/community/posts
+  GET  /api/v1/admin/users
+end note
+
+note bottom of mongo
+  Collections :
+  users | parcels
+  predictions | posts
+  alerts
+end note
+
+legend right
+  |= Couleur |= Flux |
+  |<#4CAF50> Vert | Données externes (IoT / Open Data) |
+  |<#2196F3> Bleu | Communications internes Azure |
+  |<#FF9800> Orange | Services IA & Cartographie |
+  |<#9C27B0> Violet | Trafic utilisateur mobile |
+endlegend
+
+@enduml

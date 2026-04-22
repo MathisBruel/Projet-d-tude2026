@@ -1,0 +1,100 @@
+@startuml sequence_prediction_ia
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam sequenceMessageAlign center
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam ParticipantPadding 20
+
+skinparam participant {
+    BackgroundColor #ECEFF1
+    BorderColor #455A64
+}
+skinparam actor {
+    BackgroundColor #C8E6C9
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+title AgriSense — Diagramme de Séquence : Prédiction de Rendement IA\n(Flutter → Flask → Open-Meteo + NASA POWER → Gemini → MongoDB)
+
+actor "Agriculteur" as farmer
+participant "Flutter App\n(PredictionScreen)" as flutter
+participant "Flask API\nPOST /api/v1/predictions" as api
+participant "weather_service.py" as weather_svc
+participant "gemini_service.py" as gemini_svc
+participant "Open-Meteo API" as openmeteo
+participant "NASA POWER API" as nasa
+participant "Gemini API\n(Google)" as gemini
+database "MongoDB\npredictions" as mongo
+
+== Lancement d'une prédiction ==
+
+farmer -> flutter : Sélectionne une parcelle\net clique "Prédire rendement"
+activate flutter
+
+flutter -> flutter : Affiche loader (CircularProgressIndicator)
+flutter -> api : POST /api/v1/predictions\nAuth: Bearer <JWT>\n{ parcel_id, culture_type, target_date }
+activate api
+
+' --- Récupération données météo ---
+api -> weather_svc : get_weather_data(lat, lng, target_date)
+activate weather_svc
+
+weather_svc -> openmeteo : GET /v1/forecast\n?latitude=&longitude=\n&daily=temperature_2m_max,\nprecipitation_sum,\nwindspeed_10m_max\n&forecast_days=7
+activate openmeteo
+openmeteo --> weather_svc : 200 OK\n{ daily: { temperature, precipitation, ... } }
+deactivate openmeteo
+
+weather_svc -> nasa : GET /api/temporal/daily/point\n?parameters=ALLSKY_SFC_SW_DWN\n&community=AG\n&latitude=&longitude=\n&start=&end=
+activate nasa
+nasa --> weather_svc : 200 OK\n{ properties: { radiation_data } }
+deactivate nasa
+
+weather_svc -> weather_svc : Calcule moyennes :\ntemp_avg, precip_total,\nhumidity_avg, radiation_kwh_m2
+weather_svc --> api : weather_payload { ... }
+deactivate weather_svc
+
+' --- Appel Gemini ---
+api -> gemini_svc : predict_yield(parcel, weather_payload, culture_type)
+activate gemini_svc
+
+gemini_svc -> gemini_svc : Construit le prompt :\n"Tu es un expert agronome.\nParcelle : {name}, {area}ha, {soil_type}\nCulture : {culture_type}\nMétéo prévue : temp {x}°C, pluie {y}mm,\nrayonnement {z} kWh/m²\n→ Estime le rendement en t/ha,\ndonne un % de confiance\net 3 recommandations concrètes.\nRéponds en JSON strict."
+
+gemini_svc -> gemini : POST /v1beta/models/gemini-pro:generateContent\nAPI-Key: {GEMINI_API_KEY}\n{ contents: [{ parts: [{ text: prompt }] }] }
+activate gemini
+gemini --> gemini_svc : 200 OK\n{ candidates: [{ content: { parts: [\n  { text: "{ predicted_yield: 7.2,\n    confidence: 78,\n    recommendations: [...] }" }\n] } }] }
+deactivate gemini
+
+gemini_svc -> gemini_svc : Parse JSON réponse\nValidation des champs
+gemini_svc --> api : { predicted_yield_t_ha: 7.2,\nconfidence_pct: 78,\nrecommendations: [...],\nraw_response: "..." }
+deactivate gemini_svc
+
+' --- Sauvegarde ---
+api -> mongo : db.predictions.insert_one({\n  parcel_id, user_id,\n  weather_data, soil_data,\n  predicted_yield_t_ha,\n  confidence_pct,\n  recommendations,\n  requested_at\n})
+activate mongo
+mongo --> api : inserted_id
+deactivate mongo
+
+' --- Création alerte si rendement bas ---
+alt Rendement < seuil critique (< 4 t/ha)
+    api -> mongo : db.alerts.insert_one({\n  user_id, parcel_id,\n  type: "harvest",\n  severity: "warning",\n  message: "Rendement faible prévu"\n})
+    activate mongo
+    mongo --> api : inserted_id
+    deactivate mongo
+end
+
+api --> flutter : 201 Created\n{\n  prediction_id,\n  predicted_yield_t_ha: 7.2,\n  confidence_pct: 78,\n  recommendations: [\n    "Irriguer 20mm/semaine",\n    "Traitement fongique J+5",\n    "Récolte optimale semaine 32"\n  ],\n  weather_summary: { ... }\n}
+deactivate api
+
+flutter -> flutter : Masque loader
+flutter -> flutter : Affiche ResultCard :\n  🌾 7.2 t/ha (78% confiance)\n  + graphique météo\n  + liste recommandations
+flutter --> farmer : Consulte le résultat
+deactivate flutter
+
+@enduml

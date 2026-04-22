@@ -1,0 +1,130 @@
+@startuml sequence_auth
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam sequenceMessageAlign center
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam ParticipantPadding 20
+skinparam BoxPadding 12
+
+skinparam participant {
+    BackgroundColor #ECEFF1
+    BorderColor #455A64
+    FontColor #212121
+}
+skinparam actor {
+    BackgroundColor #C8E6C9
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+title AgriSense — Diagramme de Séquence : Authentification\n(Register + Login + JWT)
+
+actor "Utilisateur" as user
+participant "Flutter App" as flutter
+participant "Flask API\n/api/v1/auth" as api
+participant "auth_service.py" as auth_svc
+database "MongoDB\nusers" as mongo
+
+== Inscription (Register) ==
+
+user -> flutter : Remplit formulaire\n(email, password, role)
+activate flutter
+
+flutter -> api : POST /api/v1/auth/register\n{ email, password, role, first_name, last_name }
+activate api
+
+api -> auth_svc : validate_and_hash(data)
+activate auth_svc
+auth_svc -> auth_svc : Validation format email\n+ force mot de passe
+auth_svc -> auth_svc : bcrypt.hash(password, rounds=12)
+auth_svc --> api : { email, password_hash, role, ... }
+deactivate auth_svc
+
+api -> mongo : db.users.insert_one(user_doc)
+activate mongo
+mongo --> api : inserted_id
+deactivate mongo
+
+api -> auth_svc : generate_jwt(user_id, role)
+activate auth_svc
+auth_svc --> api : JWT token (exp: 24h)
+deactivate auth_svc
+
+api --> flutter : 201 Created\n{ token, user: { id, email, role } }
+deactivate api
+
+flutter -> flutter : Stocke JWT\n(Flutter Secure Storage)
+flutter --> user : Redirige vers Dashboard
+deactivate flutter
+
+== Connexion (Login) ==
+
+user -> flutter : Saisit email + password
+activate flutter
+
+flutter -> api : POST /api/v1/auth/login\n{ email, password }
+activate api
+
+api -> mongo : db.users.find_one({ email })
+activate mongo
+mongo --> api : user_doc | null
+deactivate mongo
+
+alt Utilisateur introuvable
+    api --> flutter : 404 Not Found\n{ error: "Utilisateur inconnu" }
+    flutter --> user : Affiche message d'erreur
+else Mauvais mot de passe
+    api -> auth_svc : bcrypt.checkpw(password, hash)
+    activate auth_svc
+    auth_svc --> api : False
+    deactivate auth_svc
+    api --> flutter : 401 Unauthorized\n{ error: "Mot de passe incorrect" }
+    flutter --> user : Affiche message d'erreur
+else Succès
+    api -> auth_svc : bcrypt.checkpw(password, hash)
+    activate auth_svc
+    auth_svc --> api : True
+    deactivate auth_svc
+    api -> auth_svc : generate_jwt(user_id, role)
+    activate auth_svc
+    auth_svc --> api : JWT token (exp: 24h)
+    deactivate auth_svc
+    api --> flutter : 200 OK\n{ token, user: { id, email, role } }
+    deactivate api
+    flutter -> flutter : Stocke JWT\n(Flutter Secure Storage)
+    flutter --> user : Redirige vers Dashboard
+    deactivate flutter
+end
+
+== Appel authentifié (middleware JWT) ==
+
+user -> flutter : Action protégée
+activate flutter
+flutter -> api : GET /api/v1/parcels\nAuthorization: Bearer <JWT>
+activate api
+api -> auth_svc : verify_jwt(token)
+activate auth_svc
+auth_svc -> auth_svc : Décode + vérifie signature\n+ vérifie expiration
+
+alt Token invalide ou expiré
+    auth_svc --> api : Exception InvalidToken
+    deactivate auth_svc
+    api --> flutter : 401 Unauthorized\n{ error: "Token invalide" }
+    flutter --> user : Redirige vers Login
+else Token valide
+    auth_svc --> api : { user_id, role }
+    deactivate auth_svc
+    api -> api : Traitement de la requête...
+    api --> flutter : 200 OK\n{ data: [...] }
+    deactivate api
+    flutter --> user : Affiche les données
+    deactivate flutter
+end
+
+@enduml

@@ -1,0 +1,83 @@
+@startuml architecture_composants
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam ComponentBorderColor #455A64
+skinparam ComponentBackgroundColor #ECEFF1
+skinparam DatabaseBorderColor #1565C0
+skinparam DatabaseBackgroundColor #E3F2FD
+skinparam ActorBorderColor #2E7D32
+skinparam ActorBackgroundColor #C8E6C9
+skinparam RectangleBorderColor #78909C
+skinparam RectangleBorderThickness 2
+skinparam ArrowColor #546E7A
+skinparam ArrowThickness 1.5
+skinparam NoteBorderColor #F9A825
+skinparam NoteBackgroundColor #FFFDE7
+
+title AgriSense — Diagramme de Composants\n(Vue C4 Container — sans librairie externe)
+
+' ===================== ACTEURS =====================
+actor "Agriculteur" as farmer
+actor "Technicien\nAgronome" as agronomist
+actor "Administrateur" as admin
+
+' ===================== SYSTÈMES EXTERNES =====================
+cloud "Gemini API\n(Google AI Studio)" as gemini #FFE0B2
+cloud "Open-Meteo API\n(météo gratuite)" as openmeteo #E8F5E9
+cloud "NASA POWER API\n(sol + rayonnement)" as nasa #E8F5E9
+cloud "Google Maps API\n(tuiles + géocodage)" as gmaps #E3F2FD
+
+' ===================== PLATEFORME AGRISENSE =====================
+rectangle "AgriSense Platform — Azure Container Apps" #F1F8E9 {
+
+    component "Application Mobile\n[Flutter / Dart]\n\nDashboard · Carte\nPrédictions · Communauté\nBack-office Admin" as mobile #A5D6A7
+
+    component "API REST\n[Python Flask]\n\nPOST /auth/login\nGET  /parcels\nPOST /predictions\nGET  /weather\nGET  /community/posts\nGET  /admin/users" as api #90CAF9
+
+    component "Services Internes\n[Python]\n\ngemini_service.py\nweather_service.py\nauth_service.py (JWT + bcrypt)" as services #B3E5FC
+
+    database "MongoDB Atlas\n[NoSQL Document Store]\n\nusers · parcels\npredictions · posts\nalerts" as db #E1BEE7
+
+}
+
+' ===================== RELATIONS UTILISATEURS =====================
+farmer --> mobile : utilise\n(HTTPS)
+agronomist --> mobile : utilise\n(HTTPS)
+admin --> mobile : back-office\n(HTTPS)
+
+' ===================== RELATIONS INTERNES =====================
+mobile --> api : REST / JSON\n(HTTPS :443)
+mobile --> gmaps : affichage carte\n(SDK Flutter)
+
+api --> services : délègue les\nappels externes
+api --> db : lecture / écriture\n(MongoDB Driver)
+
+' ===================== RELATIONS SERVICES EXTERNES =====================
+services --> gemini : prompt de prédiction\n(HTTPS + API Key)
+services --> openmeteo : données météo\n(HTTPS — sans clé)
+services --> nasa : données sol\n(HTTPS — sans clé)
+
+' ===================== NOTES =====================
+note right of api
+  Auth : JWT (HS256, exp 24h)
+  Toutes les routes protégées
+  sauf /auth/login et /auth/register
+end note
+
+note right of db
+  Hébergé : MongoDB Atlas M0 (gratuit)
+  Region : AWS us-east-1
+  Accès restreint : IP whitelist Azure
+end note
+
+note bottom of services
+  weather_service.py agrège :
+  Open-Meteo (météo) + NASA POWER (sol)
+  → payload envoyé à Gemini dans le prompt
+end note
+
+@enduml

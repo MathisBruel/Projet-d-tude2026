@@ -1,0 +1,108 @@
+@startuml deploiement
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam NodeBorderColor #455A64
+skinparam NodeBackgroundColor #ECEFF1
+skinparam ArtifactBorderColor #1565C0
+skinparam ArtifactBackgroundColor #E3F2FD
+
+title AgriSense — Diagramme de Déploiement\n(Docker + Azure Container Apps)
+
+' ===================== DEV LOCAL =====================
+node "Machine de développement\n(Windows / Docker Desktop)" as dev_machine #E8F5E9 {
+    node "Docker Compose" as compose #A5D6A7 {
+        artifact "agrisense-backend\n(Flask:5000)" as backend_local
+        artifact "mongo:latest\n(port 27017)" as mongo_local
+    }
+    artifact "Flutter App\n(dart run)" as flutter_dev
+}
+
+' ===================== GITHUB =====================
+node "GitHub Repository\n(mono-repo)" as github #FFF3E0 {
+    artifact "main branch\n(code source)" as repo
+    artifact "GitHub Actions\n(CI pipeline)" as ci
+}
+
+' ===================== AZURE CONTAINER REGISTRY =====================
+node "Azure Container Registry\n(ACR)" as acr_node #E3F2FD {
+    artifact "agrisense-backend:latest\n(image Docker)" as acr_image
+}
+
+' ===================== AZURE CLOUD =====================
+node "Azure Cloud — France Central" as azure #E3F2FD {
+
+    node "Azure Container Apps\n(Environment: agrisense-env)" as aca #90CAF9 {
+        artifact "agrisense-api\n(Container App)\nReplicas: 1–3 (auto-scale)\nPort: 5000 → 443 HTTPS\nIngress: External" as container_app
+    }
+
+    node "Azure Virtual Network\n(VNet: agrisense-vnet)" as vnet #BBDEFB {
+        artifact "Subnet: apps\n10.0.0.0/24" as subnet
+    }
+
+    artifact "Azure Monitor\n(logs + métriques)" as monitor
+    artifact "Azure Key Vault\n(secrets: GEMINI_KEY,\nJWT_SECRET, MAPS_KEY)" as keyvault
+}
+
+' ===================== MONGODB ATLAS =====================
+node "MongoDB Atlas\n(Cluster M0 Free — AWS us-east)" as atlas #E8F5E9 {
+    artifact "agrisense DB\nCollections :\nusers, parcels,\npredictions, posts, alerts" as atlas_db
+    artifact "Network Access :\nIP Whitelist Azure Container Apps" as atlas_net
+}
+
+' ===================== SERVICES EXTERNES =====================
+node "Services Externes" as ext #FFF9C4 {
+    artifact "Gemini API\n(api.generativeai.google)" as ext_gemini
+    artifact "Open-Meteo API\n(api.open-meteo.com)" as ext_weather
+    artifact "NASA POWER API\n(power.larc.nasa.gov)" as ext_nasa
+    artifact "Google Maps API\n(maps.googleapis.com)" as ext_maps
+}
+
+' ===================== UTILISATEURS =====================
+node "Smartphones\n(Android / iOS)" as phones #F3E5F5 {
+    artifact "Flutter App\n(.apk / .ipa — TestFlight\nou build debug via\nflutter run)" as flutter_app
+}
+
+' ===================== FLUX CI/CD =====================
+dev_machine --> github : git push
+github --> ci : déclenche workflow
+ci --> acr_node : docker build + push\n(az acr build)
+acr_node --> aca : az containerapp update\n--image agrisense-backend:latest
+
+' ===================== FLUX RUNTIME =====================
+container_app --> atlas : TCP 27017\n(MongoDB Driver)
+container_app --> keyvault : Managed Identity\n(lecture des secrets)
+container_app --> ext_gemini : HTTPS POST
+container_app --> ext_weather : HTTPS GET
+container_app --> ext_nasa : HTTPS GET
+container_app --> monitor : logs + traces
+
+flutter_app --> container_app : HTTPS :443\n(REST /api/v1/)
+flutter_app --> ext_maps : HTTPS (SDK Maps)
+
+phones --> flutter_app : exécute
+
+' ===================== NOTE CI/CD =====================
+note right of ci
+  GitHub Actions Workflow :
+  1. Lint + Tests (pytest)
+  2. docker build
+  3. az acr build (push image)
+  4. az containerapp update
+     (rolling deploy 0-downtime)
+end note
+
+note right of keyvault
+  Variables injectées via
+  Azure Key Vault References :
+  - GEMINI_API_KEY
+  - JWT_SECRET
+  - GOOGLE_MAPS_API_KEY
+  - MONGO_URI
+  (jamais en clair dans le code)
+end note
+
+@enduml

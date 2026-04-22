@@ -1,0 +1,157 @@
+@startuml modele_donnees
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam classFontSize 12
+skinparam classFontStyle bold
+skinparam classAttributeFontSize 10
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam ClassBorderColor #455A64
+skinparam ClassBackgroundColor #ECEFF1
+skinparam ClassHeaderBackgroundColor #37474F
+skinparam ClassFontColor #FFFFFF
+skinparam ArrowColor #546E7A
+skinparam ArrowThickness 1.5
+skinparam NoteBorderColor #F9A825
+skinparam NoteBackgroundColor #FFFDE7
+
+title AgriSense — Modèle de Données (MCD / MLD)\nMongoDB — Collections & Relations
+
+' ===================== ENTITÉS =====================
+
+class "users" as User #37474F {
+  + _id : ObjectId  {PK}
+  --
+  + email : String  {unique, index}
+  + password_hash : String
+  + role : String   {farmer | agronomist | admin}
+  + first_name : String
+  + last_name : String
+  + phone : String
+  + created_at : DateTime
+  + updated_at : DateTime
+}
+
+class "parcels" as Parcel #2E7D32 {
+  + _id : ObjectId  {PK}
+  --
+  + user_id : ObjectId  {FK -> users}
+  + name : String
+  + culture_type : String
+  + area_ha : Float
+  + coordinates : GeoPoint[]
+  + center_lat : Float
+  + center_lng : Float
+  + soil_type : String
+  + region : String
+  + created_at : DateTime
+  + updated_at : DateTime
+}
+
+class "predictions" as Prediction #1565C0 {
+  + _id : ObjectId  {PK}
+  --
+  + parcel_id : ObjectId  {FK -> parcels}
+  + user_id : ObjectId    {FK -> users}
+  + requested_at : DateTime
+  --
+  + weather_temp_avg : Float
+  + weather_precip_mm : Float
+  + weather_humidity_pct : Float
+  + weather_sunshine_h : Float
+  + soil_radiation_kwh_m2 : Float
+  --
+  + predicted_yield_t_ha : Float
+  + confidence_pct : Integer
+  + recommendations : String[]
+  + gemini_prompt : String
+  + gemini_response : String
+}
+
+class "alerts" as Alert #E65100 {
+  + _id : ObjectId  {PK}
+  --
+  + user_id : ObjectId   {FK -> users}
+  + parcel_id : ObjectId {FK -> parcels}
+  + type : String        {weather | disease_risk | harvest | system}
+  + message : String
+  + severity : String    {info | warning | critical}
+  + read : Boolean
+  + created_at : DateTime
+}
+
+class "posts" as Post #6A1B9A {
+  + _id : ObjectId  {PK}
+  --
+  + user_id : ObjectId {FK -> users}
+  + title : String
+  + content : String
+  + tags : String[]
+  + created_at : DateTime
+  + updated_at : DateTime
+}
+
+class "replies" as Reply #6A1B9A {
+  + _id : ObjectId
+  --
+  + user_id : ObjectId {FK -> users}
+  + content : String
+  + created_at : DateTime
+}
+
+' ===================== RELATIONS =====================
+
+User "1" --o{ "0..*" Parcel     : possede >
+User "1" --o{ "0..*" Prediction : demande >
+User "1" --o{ "0..*" Alert      : recoit >
+User "1" --o{ "0..*" Post       : publie >
+
+Parcel "1" --o{ "0..*" Prediction : genere >
+Parcel "1" --o{ "0..*" Alert      : declenche >
+
+Post "1" *-- "0..*" Reply : contient\n(sous-document\nembarque)
+
+' ===================== NOTES =====================
+
+note bottom of User
+  Index MongoDB :
+  - email (unique)
+  - role
+end note
+
+note bottom of Parcel
+  Index MongoDB :
+  - user_id
+  - center (2dsphere geospatial)
+  - culture_type
+end note
+
+note bottom of Prediction
+  Index MongoDB :
+  - parcel_id + requested_at (compound)
+  - user_id
+  TTL index : 365 jours (purge auto)
+end note
+
+note right of Reply
+  Denormalisation MongoDB :
+  replies[] est un tableau de
+  sous-documents dans posts.
+  Evite les jointures ($lookup)
+  pour l'affichage du forum.
+end note
+
+' ===================== LEGENDE =====================
+legend right
+  |= Symbole        |= Signification             |
+  | {PK}            | Cle primaire (ObjectId)     |
+  | {FK -> X}       | Reference vers collection X |
+  | {unique, index} | Contrainte + index MongoDB  |
+  | Type[]          | Tableau de valeurs          |
+  | 1 --o{ *        | Relation un-a-plusieurs     |
+  | 1 *-- *         | Sous-document embarque      |
+endlegend
+
+@enduml

@@ -1,0 +1,118 @@
+@startuml cas_utilisation
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam actorStyle awesome
+skinparam usecaseBorderColor #455A64
+skinparam usecaseBackgroundColor #ECEFF1
+skinparam shadowing false
+skinparam roundcorner 12
+
+title AgriSense — Diagramme de Cas d'Utilisation
+
+left to right direction
+
+' ===================== ACTEURS =====================
+actor "Agriculteur" as farmer #2E7D32
+actor "Technicien\nAgronome" as agro #1565C0
+actor "Administrateur" as admin #6A1B9A
+
+actor "Gemini API" as gemini <<système externe>> #E65100
+actor "Open-Meteo /\nNASA POWER" as weather <<système externe>> #E65100
+actor "Google Maps API" as maps <<système externe>> #E65100
+
+' ===================== CAS D'UTILISATION =====================
+
+rectangle "AgriSense" {
+
+    ' --- Auth ---
+    package "Authentification" {
+        usecase "S'inscrire" as UC_REGISTER
+        usecase "Se connecter" as UC_LOGIN
+        usecase "Se déconnecter" as UC_LOGOUT
+    }
+
+    ' --- Tableau de bord ---
+    package "Tableau de bord" {
+        usecase "Consulter le dashboard\n(météo + alertes)" as UC_DASHBOARD
+        usecase "Consulter l'historique\ndes prédictions" as UC_HISTORY
+        usecase "Recevoir une alerte IA" as UC_ALERT
+    }
+
+    ' --- Prédiction ---
+    package "Module Prédiction IA" {
+        usecase "Lancer une prédiction\nde rendement" as UC_PREDICT
+        usecase "Consulter les recommandations\nIA détaillées" as UC_RECOMMEND
+        usecase "Consulter les données\nmétéo & sol" as UC_WEATHER_DATA
+    }
+
+    ' --- Carte ---
+    package "Carte Interactive" {
+        usecase "Visualiser ses parcelles\nsur la carte" as UC_MAP
+        usecase "Ajouter une parcelle\n(dessin / coordonnées)" as UC_ADD_PARCEL
+        usecase "Modifier / supprimer\nune parcelle" as UC_EDIT_PARCEL
+        usecase "Voir les données\npar zone" as UC_ZONE_DATA
+    }
+
+    ' --- Communauté ---
+    package "Espace Communautaire" {
+        usecase "Consulter le forum" as UC_FORUM
+        usecase "Publier un post" as UC_POST
+        usecase "Répondre à un post" as UC_REPLY
+    }
+
+    ' --- Admin ---
+    package "Back-office Admin" {
+        usecase "Gérer les utilisateurs" as UC_ADMIN_USERS
+        usecase "Gérer les parcelles\net données" as UC_ADMIN_PARCELS
+        usecase "Consulter les logs\nde prédictions" as UC_ADMIN_LOGS
+    }
+}
+
+' ===================== RELATIONS ACTEURS =====================
+
+farmer --> UC_REGISTER
+farmer --> UC_LOGIN
+farmer --> UC_LOGOUT
+farmer --> UC_DASHBOARD
+farmer --> UC_HISTORY
+farmer --> UC_PREDICT
+farmer --> UC_RECOMMEND
+farmer --> UC_MAP
+farmer --> UC_ADD_PARCEL
+farmer --> UC_EDIT_PARCEL
+farmer --> UC_FORUM
+farmer --> UC_POST
+farmer --> UC_REPLY
+
+agro --> UC_LOGIN
+agro --> UC_DASHBOARD
+agro --> UC_PREDICT
+agro --> UC_MAP
+agro --> UC_ZONE_DATA
+agro --> UC_FORUM
+agro --> UC_POST
+agro --> UC_REPLY
+
+admin --> UC_LOGIN
+admin --> UC_ADMIN_USERS
+admin --> UC_ADMIN_PARCELS
+admin --> UC_ADMIN_LOGS
+
+' ===================== RELATIONS INCLUDE/EXTEND =====================
+
+UC_DASHBOARD .> UC_WEATHER_DATA : <<include>>
+UC_PREDICT .> UC_WEATHER_DATA : <<include>>
+UC_ALERT .> UC_DASHBOARD : <<extend>>
+UC_RECOMMEND .> UC_PREDICT : <<extend>>
+UC_ZONE_DATA .> UC_MAP : <<extend>>
+
+' ===================== RELATIONS SYSTÈMES EXTERNES =====================
+
+UC_PREDICT --> gemini : appel prompt
+UC_WEATHER_DATA --> weather : GET données
+UC_MAP --> maps : affichage tuiles
+UC_ZONE_DATA --> maps : géocodage
+
+@enduml
