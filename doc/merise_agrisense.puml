@@ -1,0 +1,121 @@
+@startuml mcd_agrisense
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam roundcorner 5
+
+' Style Merise
+skinparam class {
+    BackgroundColor White
+    BorderColor Black
+    ArrowColor Black
+}
+
+' ===================== ENTITÉS =====================
+
+entity "UTILISATEUR" as User {
+  * id_utilisateur : ObjectId <<PK>>
+  --
+  email : String
+  mdp_hash : String
+  role : String
+  prenom : String
+  nom : String
+  telephone : String
+  date_creation : DateTime
+  date_maj : DateTime
+}
+
+entity "PARCELLE" as Parcel {
+  * id_parcelle : ObjectId <<PK>>
+  --
+  nom : String
+  type_culture : String
+  surface_ha : Float
+  coordonnees : GeoPoint[]
+  lat_centre : Float
+  lng_centre : Float
+  type_sol : String
+  region : String
+  date_creation : DateTime
+  date_maj : DateTime
+}
+
+entity "PREDICTION" as Prediction {
+  * id_prediction : ObjectId <<PK>>
+  --
+  date_demande : DateTime
+  meteo_temp_moy : Float
+  meteo_precip_mm : Float
+  meteo_humidite_pct : Float
+  meteo_ensoleillement_h : Float
+  rayonnement_sol : Float
+  rendement_predit : Float
+  confiance_pct : Integer
+  recommandations : String[]
+  gemini_prompt : String
+  gemini_reponse : String
+}
+
+entity "ALERTE" as Alert {
+  * id_alerte : ObjectId <<PK>>
+  --
+  type : String
+  message : String
+  severite : String
+  lu : Boolean
+  date_creation : DateTime
+}
+
+entity "POST" as Post {
+  * id_post : ObjectId <<PK>>
+  --
+  titre : String
+  contenu : String
+  tags : String[]
+  date_creation : DateTime
+  date_maj : DateTime
+}
+
+entity "REPONSE" as Reply {
+  * id_reponse : ObjectId <<PK>>
+  --
+  contenu : String
+  date_creation : DateTime
+}
+
+' ===================== ASSOCIATIONS =====================
+
+circle " " as A1
+User "1,N" -- A1 : "Posséder"
+A1 -- "1,1" Parcel
+
+circle " " as A2
+User "0,N" -- A2 : "Demander"
+A2 -- "1,1" Prediction
+
+circle " " as A3
+Parcel "0,N" -- A3 : "Générer"
+A3 -- "1,1" Prediction
+
+circle " " as A4
+User "0,N" -- A4 : "Recevoir"
+A4 -- "1,1" Alert
+
+circle " " as A5
+Parcel "0,N" -- A5 : "Déclencher"
+A5 -- "1,1" Alert
+
+circle " " as A6
+User "0,N" -- A6 : "Publier"
+A6 -- "1,1" Post
+
+circle " " as A7
+User "0,N" -- A7 : "Répondre"
+A7 -- "1,1" Reply
+
+circle " " as A8
+Post "1,N" -- A8 : "Contenir"
+A8 -- "1,1" Reply
+
+@enduml

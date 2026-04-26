@@ -1,6 +1,8 @@
 from flask import Flask
 from flask_cors import CORS
 from .config import Config
+from .database import close_db
+from .commands import init_db_command
 
 
 def create_app():
@@ -10,5 +12,8 @@ def create_app():
 
     from .routes.health import health_bp
     app.register_blueprint(health_bp)
+
+    app.teardown_appcontext(close_db)
+    app.cli.add_command(init_db_command)
 
     return app
