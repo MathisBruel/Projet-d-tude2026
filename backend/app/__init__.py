@@ -11,7 +11,9 @@ def create_app():
     CORS(app)
 
     from .routes.health import health_bp
+    from .routes.auth import auth_bp
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
 
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
