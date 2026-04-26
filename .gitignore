@@ -31,3 +31,6 @@ frontend/ios/Flutter/.last_build_id
 # Secrets
 *.env
 !*.env.example
+
+# Docker Volumes
+data/

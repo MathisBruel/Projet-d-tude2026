@@ -8,8 +8,7 @@ def create_app():
     app.config.from_object(Config)
     CORS(app)
 
-    @app.get('/health')
-    def health():
-        return {'status': 'ok', 'version': '1.0.0'}
+    from .routes.health import health_bp
+    app.register_blueprint(health_bp)
 
     return app
