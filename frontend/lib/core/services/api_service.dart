@@ -13,16 +13,41 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        return {
-          'status': 'error',
-          'message': 'Erreur HTTP ${response.statusCode}'
-        };
+        return {'status': 'error', 'message': 'Erreur HTTP ${response.statusCode}'};
       }
     } catch (e) {
-      return {
-        'status': 'error',
-        'message': 'Impossible de joindre l\'API (${AppConfig.apiUrl}). Vérifiez que le serveur tourne et que l\'IP est correcte. Détail: $e'
-      };
+      return {'status': 'error', 'message': 'Erreur: $e'};
+    }
+  }
+
+  /// Inscription d'un nouvel utilisateur
+  static Future<Map<String, dynamic>> register(Map<String, dynamic> userData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(userData),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur de connexion : $e'};
+    }
+  }
+
+  /// Connexion
+  static Future<Map<String, dynamic>> login(String email, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur de connexion : $e'};
     }
   }
 }

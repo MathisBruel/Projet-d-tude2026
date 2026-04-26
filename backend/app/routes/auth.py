@@ -33,8 +33,12 @@ def register():
         result = db.users.insert_one(new_user.to_mongo())
         new_user._id = result.inserted_id
         
+        # Générer le token pour l'auto-login
+        token = generate_token(new_user._id)
+        
         return jsonify({
             "message": "Utilisateur créé avec succès",
+            "token": token,
             "user": new_user.to_dict()
         }), 201
         
