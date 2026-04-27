@@ -46,8 +46,8 @@
 | Rôle | Nom | Responsabilités |
 | :--- | :--- | :--- |
 | **Chef de Projet / Lead Infra** | Mathis BRUEL | Architecture Cloud, Docker, intégration IA, pilotage agile. |
-| **Dev Frontend Flutter** | Henry TURCAS | UI/UX mobile, intégration Google Maps, logique client. |
-| **Dev Backend / DB** | Antoine SIMONS | API REST Flask, modélisation MongoDB, services météo. |
+| **Dev Frontend Flutter** | Henry TURCAS | UI/UX mobile, intégration Google Maps. |
+| **Dev Backend / DB** | Antoine SIMONS | API REST Flask, modélisation MongoDB, services météo, logique client. |
 
 ---
 
