@@ -40,6 +40,19 @@ Pour répondre aux besoins de Jean-Pierre, nous avons défini les parcours suiva
 
 ---
 
+## 🌐 Sources de Données & APIs
+
+AgriSense agrège des données provenant de sources fiables pour alimenter son moteur d'IA :
+
+| API | Rôle | Source |
+| :--- | :--- | :--- |
+| **Open-Meteo** | Météo temps réel et historique climatique | [open-meteo.com](https://open-meteo.com/) |
+| **NASA POWER** | Rayonnement solaire, humidité et température du sol | [nasa.gov](https://power.larc.nasa.gov/) |
+| **Gemini Pro** | Analyse multivariée et génération de conseils agronomiques | [google.ai](https://ai.google.dev/) |
+| **Google Maps** | Rendu cartographique et manipulation des polygones | [google.com](https://developers.google.com/maps) |
+
+---
+
 ## 🛠️ Stack Technique
 
 AgriSense repose sur une architecture robuste et moderne :
