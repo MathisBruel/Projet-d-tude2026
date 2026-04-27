@@ -1,0 +1,339 @@
+@startuml dct_architecture
+!define TECH(x) **x**
+!define FRONTEND_COLOR #C8E6C9
+!define BACKEND_COLOR #BBDEFB
+!define DATABASE_COLOR #FFE0B2
+!define API_COLOR #F8BBD0
+!define SERVICE_COLOR #E1BEE7
+
+skinparam backgroundColor #FAFAFA
+skinparam rectangle {
+    BackgroundColor<<frontend>> FRONTEND_COLOR
+    BackgroundColor<<backend>> BACKEND_COLOR
+    BackgroundColor<<database>> DATABASE_COLOR
+    BackgroundColor<<api>> API_COLOR
+    BackgroundColor<<service>> SERVICE_COLOR
+    BorderColor #333
+    FontColor #333
+}
+
+title DCT - Document de Contexte Technique\nStack, Architecture Logicielle, Intégrations APIs
+
+package "Frontend Layer - Flutter (Dart)" <<frontend>> {
+    rectangle "Flutter App (Android + iOS)" as APP {
+        package "Presentation (Screens)" {
+            component "Login Screen"
+            component "Dashboard Screen"
+            component "Map Screen"
+            component "Prediction Screen"
+            component "Community Screen"
+            component "Admin Dashboard"
+        }
+
+        package "Business Logic (Providers)" {
+            component "AuthProvider\n(login, logout, token)"
+            component "ParcelsProvider\n(fetch, create, update)"
+            component "PredictionsProvider\n(trigger, list results)"
+            component "CommunityProvider\n(posts, replies)"
+        }
+
+        package "Data Layer" {
+            rectangle "Repositories" {
+                component "AuthRepository"
+                component "ParcelsRepository"
+                component "PredictionsRepository"
+                component "CommunityRepository"
+            }
+
+            rectangle "Services" {
+                component "HttpClientService\n(JWT in headers)"
+                component "SecureStorageService\n(Token storage)"
+                component "LocationService\n(GPS)"
+            }
+
+            rectangle "Models" {
+                component "User Model"
+                component "Parcel Model"
+                component "Prediction Model"
+                component "Post Model"
+            }
+        }
+
+        rectangle "Core" {
+            component "Theme & Colors"
+            component "GoRouter (Navigation)"
+            component "Constants"
+        }
+    }
+}
+
+package "Backend Layer - Python Flask" <<backend>> {
+    rectangle "Flask Application" as FLASK {
+        package "API Routes" {
+            rectangle "auth_routes.py" {
+                component "POST /register"
+                component "POST /login"
+                component "POST /refresh"
+                component "GET /logout"
+            }
+
+            rectangle "parcels_routes.py" {
+                component "GET /parcels"
+                component "POST /parcels"
+                component "PUT /parcels/{id}"
+                component "DELETE /parcels/{id}"
+            }
+
+            rectangle "predictions_routes.py" {
+                component "GET /predictions"
+                component "POST /predictions\n(Trigger Gemini)"
+            }
+
+            rectangle "community_routes.py" {
+                component "GET /posts"
+                component "POST /posts"
+                component "POST /replies"
+            }
+
+            rectangle "admin_routes.py" {
+                component "GET /users"
+                component "PUT /users/{id}"
+                component "DELETE /users/{id}"
+            }
+
+            rectangle "health_routes.py" {
+                component "GET /health\n(Liveness check)"
+            }
+        }
+
+        package "Services" {
+            rectangle "auth_service.py" {
+                component "hash_password()"
+                component "verify_password()"
+                component "create_jwt()"
+                component "verify_jwt()"
+            }
+
+            rectangle "weather_service.py" {
+                component "fetch_open_meteo()\n(Temperature, Rain)"
+                component "fetch_nasa_power()\n(Radiation, Soil)"
+            }
+
+            rectangle "gemini_service.py" {
+                component "predict_yield()\n(IA Prediction)"
+                component "parse_response()"
+            }
+        }
+
+        package "Models (ORM-like)" {
+            component "User\n(email, password_hash, role)"
+            component "Parcel\n(name, coords, area, culture)"
+            component "Prediction\n(yield, confidence, advice)"
+            component "Post\n(title, content, replies)"
+        }
+
+        package "Middlewares" {
+            rectangle "jwt_middleware.py" {
+                component "@jwt_required\n(Validate token)"
+            }
+
+            rectangle "cors_middleware.py" {
+                component "CORS headers\n(Origin control)"
+            }
+
+            rectangle "error_handler.py" {
+                component "Normalize responses\n({status, data, error})"
+            }
+        }
+    }
+}
+
+package "Data Persistence - MongoDB Atlas" <<database>> {
+    rectangle "Database: agrisense" as DB {
+        rectangle "Collection: users" {
+            component "email (unique)"
+            component "password_hash"
+            component "role (farmer|agronomist|admin)"
+            component "created_at"
+        }
+
+        rectangle "Collection: parcels" {
+            component "user_id (index)"
+            component "name, area_ha"
+            component "culture_type"
+            component "coordinates (2dsphere)"
+            component "created_at"
+        }
+
+        rectangle "Collection: predictions" {
+            component "parcel_id (index)"
+            component "user_id (index)"
+            component "weather_data"
+            component "soil_data"
+            component "predicted_yield_t_ha"
+            component "confidence_pct"
+            component "gemini_response"
+            component "created_at (index)"
+        }
+
+        rectangle "Collection: posts" {
+            component "user_id (index)"
+            component "title, content"
+            component "replies[]{user_id, content}"
+            component "created_at (index)"
+        }
+
+        rectangle "Collection: alerts" {
+            component "user_id (index)"
+            component "parcel_id"
+            component "type, message"
+            component "read (index)"
+            component "created_at (TTL: 30j)"
+        }
+    }
+}
+
+package "External APIs" <<api>> {
+    rectangle "Weather APIs" {
+        component "Open-Meteo\n(Free, no auth)\nHourly + daily data" as OpenMeteo
+        component "NASA POWER\n(Free, no auth)\nSoil + Radiation" as NasaPower
+    }
+
+    rectangle "AI Service" {
+        component "Gemini API\n(Google AI Studio)\nPrompt engineering\nFree tier" as GeminiAPI
+    }
+
+    rectangle "Maps Service" {
+        component "Google Maps API\n(Flutter SDK)\nGeocoding + Markers\nFree tier $200/m" as GoogleMapsAPI
+    }
+}
+
+' Flows & Connections
+APP --> FLASK : HTTP REST\nAuthorization: Bearer <JWT>\n(HTTPS)
+
+auth_routes.py --> AuthRepository
+auth_routes.py --> User
+auth_routes.py --> auth_service.py
+
+parcels_routes.py --> ParcelsRepository
+parcels_routes.py --> Parcel
+parcels_routes.py --> DB
+
+predictions_routes.py --> PredictionsRepository
+predictions_routes.py --> weather_service.py
+predictions_routes.py --> gemini_service.py
+predictions_routes.py --> Prediction
+predictions_routes.py --> DB
+
+community_routes.py --> CommunityRepository
+community_routes.py --> Post
+community_routes.py --> DB
+
+admin_routes.py --> User
+admin_routes.py --> DB
+
+FLASK --> jwt_middleware.py : Validate\nToken
+FLASK --> cors_middleware.py : Apply\nCORS rules
+FLASK --> error_handler.py : Normalize\nResponses
+
+FLASK --> DB : Connect (TLS)\nPyMongo
+
+ParcelsRepository --> HttpClientService
+PredictionsRepository --> HttpClientService
+CommunityRepository --> HttpClientService
+
+weather_service.py --> OpenMeteo
+weather_service.py --> NasaPower
+
+gemini_service.py --> GeminiAPI
+
+SecureStorageService --> "Login Screen"
+
+HttpClientService --> AuthRepository
+
+LocationService --> "Map Screen"
+
+Parcel --> "coordinates (2dsphere)"
+
+Prediction --> weather_data
+Prediction --> soil_data
+
+' User flow annotations
+rectangle "User Flow 1: Authentication" as FLOW1 {
+    note left
+        1. User enters credentials (Login Screen)
+        2. POST /login {email, password}
+        3. Flask: verify_password() + create_jwt()
+        4. Response: {token, user_id, role}
+        5. Flutter: SecureStorage.saveToken()
+        6. Future requests: Bearer <token>
+    end note
+}
+
+rectangle "User Flow 2: Prediction IA" as FLOW2 {
+    note left
+        1. User selects parcel (Map/Dashboard)
+        2. POST /predictions {parcel_id}
+        3. Flask:
+           - Fetch parcel coords
+           - Call weather_service (Open-Meteo)
+           - Call weather_service (NASA POWER)
+           - Call gemini_service (Prompt IA)
+           - Save to MongoDB
+        4. Response: {yield, confidence, advice}
+        5. Flutter: Display result card
+    end note
+}
+
+rectangle "User Flow 3: Community" as FLOW3 {
+    note left
+        1. GET /posts (fetch forum)
+        2. Flask: MongoDB find all posts
+        3. Response: posts[]
+        4. User: Click post → GET /posts/{id}
+        5. Response: {post, replies[]}
+        6. User: Reply → POST /replies {content}
+        7. Flask: Insert in post.replies array
+    end note
+}
+
+legend right
+    |<FRONTEND_COLOR> Frontend (Flutter/Dart) |
+    |<BACKEND_COLOR> Backend (Flask/Python) |
+    |<DATABASE_COLOR> Database (MongoDB) |
+    |<API_COLOR> External APIs |
+    |<SERVICE_COLOR> Business Services |
+end legend
+
+note bottom of FLASK
+    **Request Flow**
+    1. Receive HTTP request (HTTPS)
+    2. JWT middleware: Validate token → extract user_id
+    3. Route handler: Parse JSON body
+    4. Service layer: Business logic (Gemini, Weather, etc.)
+    5. Model layer: MongoDB queries
+    6. Response: Normalize to {status, data, error}
+    7. Middleware: CORS headers + error handling
+end note
+
+note bottom of DB
+    **Data Integrity**
+    - Unique index on users.email
+    - Foreign key-like: parcels.user_id refs users._id
+    - Geo-index: parcels.coordinates for proximity queries
+    - TTL index: alerts auto-cleanup after 30 days
+    - Compound index: predictions(user_id, created_at)
+end note
+
+note bottom of OpenMeteo
+    **Data Integration Pattern**
+    1. Get parcel coordinates from MongoDB
+    2. Call external API (lat, lng)
+    3. Parse JSON response
+    4. Structure into service response
+    5. Combine with other data sources
+    6. Pass to Gemini for context
+    7. Cache in MongoDB (avoid re-calls)
+end note
+
+@enduml

@@ -1,0 +1,170 @@
+@startuml dat_architecture
+!define TECH(x) **x**
+!define CLOUD_COLOR #E1F5FE
+!define CONTAINER_COLOR #FFF9C4
+!define SECURITY_COLOR #FFCCCC
+!define MONITORING_COLOR #E8F5E9
+
+skinparam backgroundColor #FAFAFA
+skinparam rectangle {
+    BackgroundColor<<cloud>> CLOUD_COLOR
+    BackgroundColor<<container>> CONTAINER_COLOR
+    BackgroundColor<<security>> SECURITY_COLOR
+    BackgroundColor<<monitoring>> MONITORING_COLOR
+    BorderColor #333
+    FontColor #333
+}
+
+title DAT - Document d'Architecture Technique\nInfrastructure, Déploiement, Sécurité
+
+package "Internet & DNS" {
+    node "HTTPS Traffic\n(Port 443)" as DNS
+}
+
+note right of DNS
+    TLS 1.2+ (Auto-renouvelé)
+end note
+
+package "Azure Ressources" {
+    rectangle "Resource Group\nagrisense-rg" as RG {
+        package "Azure Container Apps" <<cloud>> {
+            rectangle "Ingress (LB + TLS)" as INGRESS
+
+            rectangle "Container Instance 1\n(Flask API)\nPort: 5000" as CONTAINER1 <<container>> {
+                component "Health Check\n/api/v1/health" as HC1
+            }
+
+            rectangle "Container Instance 2\n(Flask API)\nPort: 5000" as CONTAINER2 <<container>> {
+                component "Health Check\n/api/v1/health" as HC2
+            }
+
+            INGRESS --> CONTAINER1 : Load\nBalance
+            INGRESS --> CONTAINER2 : Load\nBalance
+        }
+
+        note right of INGRESS
+            Auto-scaling
+            Replicas: 2-5
+        end note
+
+        rectangle "Azure Key Vault\n(Secrets)" as KV <<security>> {
+            component "MONGO_URI"
+            component "GEMINI_API_KEY"
+            component "GOOGLE_MAPS_API_KEY"
+            component "JWT_SECRET"
+        }
+
+        rectangle "Azure Monitor\n(Observabilité)" as MONITOR <<monitoring>> {
+            component "Application Insights\n(Logs & Metrics)"
+            component "Log Analytics\n(Centralized Logs)"
+            component "Alert Rules\n(5xx > 5/min)"
+        }
+    }
+
+    CONTAINER1 ..> KV : Access via\nManaged Identity
+    CONTAINER2 ..> KV : Access via\nManaged Identity
+    CONTAINER1 --> MONITOR : Telemetry
+    CONTAINER2 --> MONITOR : Telemetry
+}
+
+package "MongoDB VM (Standard_B2s)" {
+    rectangle "Virtual Machine\n(Ubuntu 22.04)" as DBVM {
+        component "MongoDB Server\nPort: 27017\n(Private)"
+    }
+
+    rectangle "Managed Disk\n(100+ GB)" as DBDISK {
+        component "MongoDB Data\n+ Backups"
+    }
+
+    DBVM --> DBDISK : Read/Write
+}
+
+note right of DBVM
+    Collections:
+    users, parcels,
+    predictions, posts,
+    alerts
+end note
+
+package "External Services" {
+    rectangle "External APIs" as EXTAPI {
+        component "Open-Meteo\n(Weather Data)"
+        component "NASA POWER\n(Soil Data)"
+        component "Gemini API\n(AI Predictions)"
+        component "Google Maps API\n(Geocoding)"
+    }
+}
+
+package "Frontend" {
+    rectangle "Flutter Mobile App\n(Android + iOS)" as FLUTTER {
+        component "Secure Token Storage\n(FlutterSecureStorage)"
+        component "HTTP Client\n(+ JWT Headers)"
+    }
+}
+
+DNS --> INGRESS : HTTPS\nRequest
+
+FLUTTER --> INGRESS : REST API Calls\nAuthorization: Bearer <JWT>
+
+CONTAINER1 --> DBVM : Read/Write\n(Private Network)\nPort 27017
+CONTAINER2 --> DBVM : Read/Write\n(Private Network)\nPort 27017
+
+CONTAINER1 --> EXTAPI : API Calls
+CONTAINER2 --> EXTAPI : API Calls
+
+FLUTTER -.-> MONITOR : Crash Reports\n(Optional)
+
+package "CI/CD Pipeline" {
+    rectangle "GitHub Actions" as GITHUB {
+        component "Build Image\n(Docker)"
+        component "Push to ACR\n(Azure Container Registry)"
+        component "Deploy to Container Apps\n(Rolling Update)"
+        component "Health Check\n(Rollback if Failed)"
+    }
+}
+
+rectangle "Local Dev Environment\n(docker-compose)" as LOCAL {
+    component "MongoDB Local\n(Port 27017)"
+    component "Flask Dev\n(Port 5000)"
+    component "Flutter Dev\n(Port 8080)"
+}
+
+GITHUB -.->  CONTAINER1 : Deploy new\nImage
+GITHUB -.->  CONTAINER2 : Deploy new\nImage
+
+LOCAL -.-> DBVM : Seed data\n(via mongorestore)
+
+legend right
+    |<CLOUD_COLOR> Azure Cloud Services |
+    |<CONTAINER_COLOR> Container Workloads |
+    |<SECURITY_COLOR> Security / Secrets |
+    |<MONITORING_COLOR> Observability |
+end legend
+
+note bottom of RG
+    **Deployment Strategy**
+    - Staging: Auto-deploy from develop branch
+    - Production: Manual approval from main branch
+    - Rollback: Auto if health check fails
+    - Replicas: Auto-scaling based on CPU/Memory
+    - Monitoring: Azure Monitor + Slack alerts
+end note
+
+note bottom of KV
+    **Secrets Management**
+    - No secrets in code or env files
+    - Managed Identity: Containers auto-authenticate
+    - Audit logs: All access tracked
+    - Rotation: Manual via Azure Portal
+end note
+
+note bottom of DBVM
+    **MongoDB VM Security**
+    - Private network: Container Apps only
+    - Authentication: username/password (SCRAM-SHA-256)
+    - Firewall: Azure NSG restricts access
+    - Backup: Daily VM snapshots + mongodump
+    - Replication: Standalone (Replica Set future)
+end note
+
+@enduml
