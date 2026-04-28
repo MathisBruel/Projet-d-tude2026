@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:agrisense/core/theme/app_theme.dart';
 import 'package:agrisense/core/services/api_service.dart';
+import 'package:agrisense/core/services/auth_storage_service.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -78,6 +79,10 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = false);
 
     if (result.containsKey('token') && result.containsKey('message') && result['message'].toString().contains('succès')) {
+      // Sauvegarder le token et l'ID utilisateur
+      await AuthStorageService.saveToken(result['token'] as String);
+      await AuthStorageService.saveUserId(result['user']['_id'] as String);
+
       if (mounted) {
         // Auto-login réussi (token reçu)
         ScaffoldMessenger.of(context).showSnackBar(
@@ -101,223 +106,312 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.neutreDark),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                  child: GestureDetector(
+                    onTap: () => context.pop(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.neutreLight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.arrow_back, size: 20, color: AppColors.neutreDark),
+                    ),
+                  ),
+                ),
               // Stepper
               Row(
                 children: [
-                  _buildStepCircle('1', true),
-                  const SizedBox(width: 8),
-                  const Text('Compte', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Container(height: 2, color: AppColors.primary)),
-                  const SizedBox(width: 12),
-                  const Text('Exploitation', style: TextStyle(color: AppColors.neutreMedium)),
-                  const SizedBox(width: 8),
-                  _buildStepCircle('2', false),
-                ],
-              ),
-              const SizedBox(height: 32),
-              
-              Text(
-                'Créer votre compte',
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Vos informations personnelles',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.neutreMedium),
-              ),
-              const SizedBox(height: 32),
-              
-              // Name Row
-              Row(
-                children: [
                   Expanded(
-                    child: TextField(
-                      controller: _firstNameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(hintText: 'Pierre'),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: _lastNameController,
-                      inputFormatters: [
-                        UpperCaseTextFormatter(),
+                    child: Row(
+                      children: const [
+                        _StepBadge(active: true, label: '1'),
+                        SizedBox(width: 10),
+                        Text('Compte', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.neutreDark)),
                       ],
-                      decoration: const InputDecoration(hintText: 'MOREAU'),
+                    ),
+                  ),
+                  Expanded(
+                    child: SizedBox(
+                      height: 2,
+                      child: Stack(
+                        children: [
+                          Container(decoration: BoxDecoration(color: AppColors.neutreLight, borderRadius: BorderRadius.circular(1))),
+                          Container(width: 40, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(1))),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: const [
+                        Text('Exploitation', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.neutreMedium)),
+                        SizedBox(width: 10),
+                        _StepBadge(active: false, label: '2'),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              
-              // Email
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.mail_outline),
-                  hintText: 'pierre.moreau@beauce.fr',
-                ),
+              const SizedBox(height: 24),
+              const Text(
+                'Créer votre compte',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5),
               ),
-              const SizedBox(height: 16),
-              
-              // Password
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  hintText: '••••••••••••',
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              const SizedBox(height: 4),
+              const Text(
+                'Vos informations personnelles',
+                style: TextStyle(fontSize: 13, color: AppColors.neutreMedium),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _AgriTextField(
+                      controller: _firstNameController,
+                      hintText: 'Pierre',
+                      textCapitalization: TextCapitalization.words,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _AgriTextField(
+                      controller: _lastNameController,
+                      hintText: 'Moreau',
+                      inputFormatters: [UpperCaseTextFormatter()],
+                    ),
+                  ),
+                ],
               ),
-              
               const SizedBox(height: 12),
-              // Password strength dynamic
-              Row(
-                children: [
-                  Expanded(child: _buildStrengthBar(_passwordStrength >= 1 ? AppColors.primary : AppColors.border)),
-                  const SizedBox(width: 4),
-                  Expanded(child: _buildStrengthBar(_passwordStrength >= 2 ? AppColors.primary : AppColors.border)),
-                  const SizedBox(width: 4),
-                  Expanded(child: _buildStrengthBar(_passwordStrength >= 3 ? AppColors.primary : AppColors.border)),
-                  const SizedBox(width: 4),
-                  Expanded(child: _buildStrengthBar(_passwordStrength >= 4 ? AppColors.primary : AppColors.border)),
-                ],
+              _AgriTextField(
+                controller: _emailController,
+                hintText: 'pierre.moreau@beauce.fr',
+                prefixIcon: Icons.mail_outline,
+                keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    _passwordStrength < 2 ? 'Faible' : (_passwordStrength < 4 ? 'Moyen' : 'Fort'), 
-                    style: TextStyle(
-                      color: _passwordStrength < 2 ? AppColors.error : AppColors.primary, 
-                      fontSize: 12, 
-                      fontWeight: FontWeight.bold
-                    )
+              const SizedBox(height: 12),
+              _AgriTextField(
+                controller: _passwordController,
+                hintText: '••••••••••',
+                prefixIcon: Icons.lock_outline,
+                obscureText: _obscurePassword,
+                suffix: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    color: AppColors.neutreMedium,
                   ),
-                  const Text(' — Min. 8 carac. + maj. + chiffres', style: TextStyle(color: AppColors.neutreMedium, fontSize: 12)),
-                  const Spacer(),
-                  if (_passwordStrength >= 3) const Icon(Icons.check_circle, color: AppColors.primary, size: 14),
-                ],
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
               ),
-              
-              const SizedBox(height: 32),
-              Text('Je suis', style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              
-              // Role selection
+              const SizedBox(height: 10),
+              _PasswordStrength(strength: _passwordStrength),
+              const SizedBox(height: 24),
+              const Text('Je suis', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: _buildRoleCard(
                       'Agriculteur',
                       'Gérer mes parcelles et obtenir des prédictions',
-                      Icons.eco_outlined,
+                      Icons.eco_rounded,
                       _selectedRole == 'Agriculteur',
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: _buildRoleCard(
                       'Agronome',
                       'Expertise technique et conseils',
-                      Icons.architecture_outlined,
+                      Icons.smart_toy_rounded,
                       _selectedRole == 'Agronome',
                     ),
                   ),
                 ],
               ),
-              
-              const SizedBox(height: 40),
-              
+              const SizedBox(height: 28),
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleContinue,
-                child: _isLoading 
-                  ? const SizedBox(
-                      height: 20, 
-                      width: 20, 
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Text('Continuer'),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward, size: 20),
-                      ],
-                    ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text('Continuer'),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward, size: 18),
+                        ],
+                      ),
               ),
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStepCircle(String text, bool active) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary : AppColors.white,
-        border: Border.all(color: active ? AppColors.primary : AppColors.border, width: 1.5),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            color: active ? AppColors.white : AppColors.neutreMedium,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
-  }
-
-  Widget _buildStrengthBar(Color color) {
-    return Container(height: 4, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)));
   }
 
   Widget _buildRoleCard(String title, String sub, IconData icon, bool selected) {
     return GestureDetector(
       onTap: () => setState(() => _selectedRole = title),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected ? AppColors.surfacePrimary : AppColors.white,
-          border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: 1.5),
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1.5),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: selected ? AppColors.primary : AppColors.neutreMedium),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            Icon(icon, color: selected ? AppColors.primary : AppColors.neutreMedium, size: 22),
+            const SizedBox(height: 6),
+            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.neutreDark)),
             const SizedBox(height: 4),
-            Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.neutreMedium)),
+            Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.neutreMedium, height: 1.3)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepBadge extends StatelessWidget {
+  const _StepBadge({required this.active, required this.label});
+
+  final bool active;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: active ? AppColors.primary : AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: active ? AppColors.primary : AppColors.neutreLight, width: 1.5),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: active ? AppColors.white : AppColors.neutreMedium,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordStrength extends StatelessWidget {
+  const _PasswordStrength({required this.strength});
+
+  final int strength;
+
+  @override
+  Widget build(BuildContext context) {
+    final isStrong = strength >= 3;
+    final activeColor = isStrong ? AppColors.success : AppColors.primary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(4, (index) {
+            final filled = strength > index;
+            return Expanded(
+              child: Container(
+                height: 4,
+                margin: EdgeInsets.only(right: index == 3 ? 0 : 4),
+                decoration: BoxDecoration(
+                  color: filled ? activeColor : AppColors.neutreLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          isStrong
+              ? 'Fort — 12 caractères, majuscules, chiffres ✓'
+              : 'Moyen — 8+ caractères, majuscules, chiffres',
+          style: TextStyle(fontSize: 11, color: activeColor, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+class _AgriTextField extends StatelessWidget {
+  const _AgriTextField({
+    required this.controller,
+    required this.hintText,
+    this.prefixIcon,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.obscureText = false,
+    this.suffix,
+    this.inputFormatters,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final IconData? prefixIcon;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final bool obscureText;
+  final Widget? suffix;
+  final List<TextInputFormatter>? inputFormatters;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
+        obscureText: obscureText,
+        inputFormatters: inputFormatters,
+        decoration: InputDecoration(
+          hintText: hintText,
+          prefixIcon: prefixIcon == null
+              ? null
+              : Icon(prefixIcon, color: AppColors.neutreMedium, size: 18),
+          suffixIcon: suffix,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
         ),
       ),
     );

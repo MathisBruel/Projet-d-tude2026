@@ -1,0 +1,5 @@
+# Propriétés locales Android
+# Copier en local.properties et remplir les valeurs
+
+# Google Maps API Key (charger depuis .env)
+google.maps.api.key=YOUR_GOOGLE_MAPS_API_KEY

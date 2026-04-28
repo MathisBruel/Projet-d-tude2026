@@ -12,8 +12,10 @@ def create_app():
 
     from .routes.health import health_bp
     from .routes.auth import auth_bp
+    from .routes.parcels import parcels_bp
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(parcels_bp, url_prefix='/api/v1/parcels')
 
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)

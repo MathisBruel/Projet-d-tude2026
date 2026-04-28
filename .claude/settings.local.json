@@ -3,7 +3,13 @@
     "allow": [
       "Bash(python3 -c ' *)",
       "Bash(python -c ' *)",
-      "Bash(flutter pub *)"
+      "Bash(flutter pub *)",
+      "Bash(flutter build *)",
+      "Bash(flutter clean *)",
+      "Bash(flutter run *)",
+      "Bash(tee /tmp/flutter_run.log)",
+      "Read(//tmp/**)",
+      "Bash(flutter devices *)"
     ]
   }
 }

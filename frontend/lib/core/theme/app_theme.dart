@@ -11,10 +11,10 @@ class AppColors {
   static const Color surfaceAmber = Color(0xFFFFF8E1);
 
   // Neutres
-  static const Color neutreDark = Color(0xFF1C282D);
+  static const Color neutreDark = Color(0xFF1C2B2D);
   static const Color neutreMedium = Color(0xFF546E7A);
   static const Color neutreLight = Color(0xFFECEFF1);
-  static const Color background = Color(0xFFF4F0F4);
+  static const Color background = Color(0xFFF4F6F4);
   static const Color white = Color(0xFFFFFFFF);
 
   // Status

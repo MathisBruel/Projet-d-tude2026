@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConfig {
-  /// URL de base de l'API. 
-  /// Peut être surchargée à la compilation avec --dart-define=API_URL=...
-  static const String apiUrl = String.fromEnvironment(
-    'API_URL',
-    defaultValue: 'http://10.0.2.2:5000', // IP par défaut pour l'émulateur Android vers le localhost PC
-  );
+  static late String apiUrl;
+  static late String googleMapsApiKey;
+
+  static Future<void> init() async {
+    await dotenv.load();
+
+    apiUrl = dotenv.env['API_URL'] ?? 'http://10.0.2.2:5000';
+    googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+  }
 
   static bool get isDebug => kDebugMode;
 }

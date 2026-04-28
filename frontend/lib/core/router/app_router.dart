@@ -5,6 +5,11 @@ import 'package:agrisense/features/auth/presentation/pages/login_page.dart';
 import 'package:agrisense/features/auth/presentation/pages/register_page.dart';
 import 'package:agrisense/features/auth/presentation/pages/register_success_page.dart';
 import 'package:agrisense/features/home/presentation/pages/home_page.dart';
+import 'package:agrisense/features/map/presentation/pages/map_page.dart';
+import 'package:agrisense/features/map/presentation/pages/add_parcel_page.dart';
+import 'package:agrisense/features/predict/presentation/pages/predict_page.dart';
+import 'package:agrisense/features/community/presentation/pages/community_page.dart';
+import 'package:agrisense/features/profile/presentation/pages/profile_page.dart';
 
 class AppRouter {
   static final router = GoRouter(
@@ -29,6 +34,26 @@ class AppRouter {
       GoRoute(
         path: '/home',
         builder: (context, state) => const HomePage(),
+      ),
+      GoRoute(
+        path: '/map',
+        builder: (context, state) => const MapPage(),
+      ),
+      GoRoute(
+        path: '/map/add',
+        builder: (context, state) => const AddParcelPage(),
+      ),
+      GoRoute(
+        path: '/predict',
+        builder: (context, state) => const PredictPage(),
+      ),
+      GoRoute(
+        path: '/community',
+        builder: (context, state) => const CommunityPage(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfilePage(),
       ),
     ],
   );
