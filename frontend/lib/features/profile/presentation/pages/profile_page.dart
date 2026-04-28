@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:agrisense/core/theme/app_theme.dart';
 import 'package:agrisense/core/services/api_service.dart';
+import 'package:agrisense/core/services/profile_image_service.dart';
+import 'package:agrisense/core/config/app_config.dart';
 import 'package:go_router/go_router.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -12,11 +17,69 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   late Future<ProfileViewData> _profileFuture;
+  bool _isEditing = false;
+  final _imagePicker = ImagePicker();
+  File? _selectedProfileImage;
+
+  // Formulaire fields
+  late TextEditingController _firstNameCtrl;
+  late TextEditingController _lastNameCtrl;
+  late TextEditingController _phoneCtrl;
+  late TextEditingController _locationCtrl;
 
   @override
   void initState() {
     super.initState();
     _profileFuture = _loadProfile();
+    _firstNameCtrl = TextEditingController();
+    _lastNameCtrl = TextEditingController();
+    _phoneCtrl = TextEditingController();
+    _locationCtrl = TextEditingController();
+  }
+
+  Future<void> _pickAndUploadProfilePhoto() async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null && mounted) {
+        final imageFile = File(pickedFile.path);
+        setState(() {
+          _selectedProfileImage = imageFile;
+        });
+
+        // Upload to backend
+        final uploadResponse = await ApiService.uploadAvatar(imageFile);
+
+        if (uploadResponse['error'] == null && mounted) {
+          // Store the local image for display
+          await ProfileImageService().setProfileImage(imageFile);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo de profil mise à jour ✓')),
+          );
+          // Reload profile to refresh the UI
+          setState(() => _profileFuture = _loadProfile());
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur: ${uploadResponse['error']}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _locationCtrl.dispose();
+    super.dispose();
   }
 
   Future<ProfileViewData> _loadProfile() async {
@@ -25,6 +88,38 @@ class _ProfilePageState extends State<ProfilePage> {
       throw Exception(response['error']);
     }
     return ProfileViewData.fromJson(response);
+  }
+
+  Future<void> _saveProfile() async {
+    final resp = await ApiService.updateProfile({
+      'first_name': _firstNameCtrl.text,
+      'last_name': _lastNameCtrl.text,
+      'phone': _phoneCtrl.text,
+      'location_name': _locationCtrl.text,
+    });
+
+    if (mounted) {
+      if (resp['error'] == null) {
+        setState(() {
+          _isEditing = false;
+          _profileFuture = _loadProfile();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil mis à jour ✓')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${resp['error']}')),
+        );
+      }
+    }
+  }
+
+  void _initEditFields(ProfileViewData data) {
+    _firstNameCtrl.text = data.firstName;
+    _lastNameCtrl.text = data.lastName;
+    _phoneCtrl.text = data.phone;
+    _locationCtrl.text = data.location;
   }
 
   void _showSnack(String message) {
@@ -67,58 +162,75 @@ class _ProfilePageState extends State<ProfilePage> {
             }
 
             final data = snapshot.data!;
+            if (_isEditing && _firstNameCtrl.text.isEmpty) {
+              _initEditFields(data);
+            }
             return SingleChildScrollView(
               child: Column(
                 children: [
                   _HeaderCard(
-                    onBack: () => context.pop(),
-                    onSettings: () => _showSnack('Parametres'),
-                    onTap: () => _showSnack('Profil'),
+                    onBack: () => context.go('/home'),
+                    onSettings: _isEditing
+                        ? () => setState(() => _isEditing = false)
+                        : () => setState(() => _isEditing = true),
+                    onAvatarTap: _pickAndUploadProfilePhoto,
                     name: data.name,
                     role: data.roleLabel,
                     location: data.location,
                     badgeLabel: data.badgeLabel,
                     initials: data.initials,
+                    isEditing: _isEditing,
+                    profileImage: _selectedProfileImage,
+                    avatarUrl: data.avatarUrl,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionTitle('Mon exploitation'),
-                        const SizedBox(height: 8),
-                        _FarmStatsCard(
-                          parcels: data.parcelsCount,
-                          areaHa: data.totalAreaHa,
-                          mainCrop: data.mainCrop,
-                          onTap: () => _showSnack('Stats exploitation'),
+                  _isEditing
+                      ? _EditProfileForm(
+                          firstNameCtrl: _firstNameCtrl,
+                          lastNameCtrl: _lastNameCtrl,
+                          phoneCtrl: _phoneCtrl,
+                          locationCtrl: _locationCtrl,
+                          onSave: _saveProfile,
+                          onCancel: () => setState(() => _isEditing = false),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          const _SectionTitle('Mon exploitation'),
+                          const SizedBox(height: 8),
+                          _FarmStatsCard(
+                            parcels: data.parcelsCount,
+                            areaHa: data.totalAreaHa,
+                            mainCrop: data.mainCrop,
+                            onTap: () => _showSnack('Stats exploitation'),
+                          ),
+                          const SizedBox(height: 18),
+                          const _SectionTitle('Mes statistiques'),
+                          const SizedBox(height: 8),
+                          _StatsCard(
+                            predictionsCount: data.predictionsCount,
+                            avgYield: data.avgYield,
+                            bestParcel: data.bestParcelLabel,
+                            bestYield: data.bestParcelYield,
+                            onTap: (label) => _showSnack(label),
+                          ),
+                          const SizedBox(height: 16),
+                          _ActionTile(
+                            icon: Icons.edit_outlined,
+                            title: 'Modifier mes informations',
+                            onTap: () => setState(() => _isEditing = true),
+                          ),
+                          const SizedBox(height: 10),
+                          _ActionTile(
+                            icon: Icons.notifications_none,
+                            title: 'Notifications',
+                            trailing: data.notificationsLabel,
+                            onTap: () => _showSnack('Notifications'),
+                          ),
+                        ],
+                          ),
                         ),
-                        const SizedBox(height: 18),
-                        const _SectionTitle('Mes statistiques'),
-                        const SizedBox(height: 8),
-                        _StatsCard(
-                          predictionsCount: data.predictionsCount,
-                          avgYield: data.avgYield,
-                          bestParcel: data.bestParcelLabel,
-                          bestYield: data.bestParcelYield,
-                          onTap: (label) => _showSnack(label),
-                        ),
-                        const SizedBox(height: 16),
-                        _ActionTile(
-                          icon: Icons.edit_outlined,
-                          title: 'Modifier le profil',
-                          onTap: () => _showSnack('Modifier le profil'),
-                        ),
-                        const SizedBox(height: 10),
-                        _ActionTile(
-                          icon: Icons.notifications_none,
-                          title: 'Notifications',
-                          trailing: data.notificationsLabel,
-                          onTap: () => _showSnack('Notifications'),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             );
@@ -133,22 +245,28 @@ class _HeaderCard extends StatelessWidget {
   const _HeaderCard({
     required this.onBack,
     required this.onSettings,
-    required this.onTap,
+    required this.onAvatarTap,
     required this.name,
     required this.role,
     required this.location,
     required this.badgeLabel,
     required this.initials,
+    this.isEditing = false,
+    this.profileImage,
+    this.avatarUrl,
   });
 
   final VoidCallback onBack;
   final VoidCallback onSettings;
-  final VoidCallback onTap;
+  final VoidCallback onAvatarTap;
   final String name;
   final String role;
   final String location;
   final String badgeLabel;
   final String initials;
+  final bool isEditing;
+  final File? profileImage;
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -157,9 +275,7 @@ class _HeaderCard extends StatelessWidget {
         bottomLeft: Radius.circular(24),
         bottomRight: Radius.circular(24),
       ),
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
+      child: Container(
           height: 240,
           width: double.infinity,
           decoration: const BoxDecoration(
@@ -198,7 +314,7 @@ class _HeaderCard extends StatelessWidget {
                 right: 12,
                 top: 12,
                 child: _HeaderIconButton(
-                  icon: Icons.settings,
+                  icon: isEditing ? Icons.close : Icons.settings,
                   onTap: onSettings,
                 ),
               ),
@@ -206,19 +322,58 @@ class _HeaderCard extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: Colors.white,
-                      child: Text(
-                        initials,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1C2B2D),
-                        ),
+                    GestureDetector(
+                      onTap: onAvatarTap,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 46,
+                            backgroundColor: Colors.white,
+                            backgroundImage: avatarUrl != null
+                                ? NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>
+                                : (profileImage != null
+                                    ? FileImage(profileImage!) as ImageProvider<Object>
+                                    : null),
+                            child: (avatarUrl == null && profileImage == null)
+                                ? Text(
+                                    initials,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1C2B2D),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2E7D32),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
                       name,
                       style: const TextStyle(
@@ -266,8 +421,7 @@ class _HeaderCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -611,6 +765,146 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
+class _EditProfileForm extends StatelessWidget {
+  const _EditProfileForm({
+    required this.firstNameCtrl,
+    required this.lastNameCtrl,
+    required this.phoneCtrl,
+    required this.locationCtrl,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  final TextEditingController firstNameCtrl;
+  final TextEditingController lastNameCtrl;
+  final TextEditingController phoneCtrl;
+  final TextEditingController locationCtrl;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle('Informations personnelles'),
+          const SizedBox(height: 12),
+          _EditTextField(
+            label: 'Prénom',
+            controller: firstNameCtrl,
+            icon: Icons.person_outline,
+          ),
+          const SizedBox(height: 10),
+          _EditTextField(
+            label: 'Nom',
+            controller: lastNameCtrl,
+            icon: Icons.person_outline,
+          ),
+          const SizedBox(height: 10),
+          _EditTextField(
+            label: 'Téléphone',
+            controller: phoneCtrl,
+            icon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+          ),
+          const SizedBox(height: 18),
+          const _SectionTitle('Localisation'),
+          const SizedBox(height: 12),
+          _EditTextField(
+            label: 'Adresse / Région',
+            controller: locationCtrl,
+            icon: Icons.location_on_outlined,
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Annuler'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onSave,
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Enregistrer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditTextField extends StatelessWidget {
+  const _EditTextField({
+    required this.label,
+    required this.controller,
+    required this.icon,
+    this.keyboardType = TextInputType.text,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final IconData icon;
+  final TextInputType keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          )
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          label: Text(label),
+          labelStyle: const TextStyle(
+            color: AppColors.neutreMedium,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(icon, color: AppColors.primary, size: 18),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+        style: const TextStyle(
+          color: AppColors.neutreDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
 class ProfileViewData {
   final String name;
   final String initials;
@@ -625,6 +919,10 @@ class ProfileViewData {
   final String bestParcelLabel;
   final String bestParcelYield;
   final String notificationsLabel;
+  final String firstName;
+  final String lastName;
+  final String phone;
+  final String? avatarUrl;
 
   ProfileViewData({
     required this.name,
@@ -640,6 +938,10 @@ class ProfileViewData {
     required this.bestParcelLabel,
     required this.bestParcelYield,
     required this.notificationsLabel,
+    required this.firstName,
+    required this.lastName,
+    required this.phone,
+    this.avatarUrl,
   });
 
   factory ProfileViewData.fromJson(Map<String, dynamic> json) {
@@ -648,6 +950,7 @@ class ProfileViewData {
 
     final firstName = (profile['first_name'] as String?) ?? '';
     final lastName = (profile['last_name'] as String?) ?? '';
+    final phone = (profile['phone'] as String?) ?? '';
     final fullName = '${firstName.trim()} ${lastName.trim()}'.trim();
     final name = fullName.isEmpty ? 'Utilisateur' : fullName;
     final initials = _initialsFromName(name);
@@ -670,6 +973,7 @@ class ProfileViewData {
 
     final notificationsCount = stats['notifications_unread'] ?? 0;
     final notificationsLabel = '$notificationsCount actives';
+    final avatarUrl = (profile['avatar_url'] as String?);
 
     return ProfileViewData(
       name: name,
@@ -685,6 +989,10 @@ class ProfileViewData {
       bestParcelLabel: bestParcel,
       bestParcelYield: bestYield,
       notificationsLabel: notificationsLabel,
+      firstName: firstName,
+      lastName: lastName,
+      phone: phone,
+      avatarUrl: avatarUrl,
     );
   }
 }

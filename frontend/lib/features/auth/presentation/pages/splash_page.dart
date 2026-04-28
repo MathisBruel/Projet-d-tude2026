@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:agrisense/core/theme/app_theme.dart';
+import 'package:agrisense/core/config/app_config.dart';
+import 'package:agrisense/core/services/api_service.dart';
+import 'package:agrisense/core/services/auth_storage_service.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -18,13 +21,62 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     )..repeat();
-    _navigateToLogin();
+    _initializeApp();
   }
 
-  _navigateToLogin() async {
+  _initializeApp() async {
     await Future.delayed(const Duration(seconds: 3));
     if (mounted) {
-      context.go('/login');
+      if (AppConfig.autoLogin) {
+        await _performAutoLogin();
+      } else {
+        context.go('/login');
+      }
+    }
+  }
+
+  Future<void> _performAutoLogin() async {
+    try {
+      print('[AUTO-LOGIN] Tentative de connexion avec: ${AppConfig.autoLoginEmail}');
+      print('[AUTO-LOGIN] API URL: ${AppConfig.apiUrl}');
+
+      final response = await ApiService.login(
+        AppConfig.autoLoginEmail,
+        AppConfig.autoLoginPassword,
+      );
+
+      print('[AUTO-LOGIN] Réponse du serveur: $response');
+
+      if (mounted) {
+        // La réponse contient le token directement (pas dans 'data')
+        final token = response['token'] as String?;
+        final user = response['user'] as Map<String, dynamic>?;
+
+        if (token != null && token.isNotEmpty && user != null) {
+          print('[AUTO-LOGIN] Connexion réussie! Token: ${token.substring(0, 20)}...');
+
+          // Sauvegarder le token et l'ID utilisateur
+          await AuthStorageService.saveToken(token);
+          await AuthStorageService.saveUserId(user['_id'] as String? ?? '');
+
+          context.go('/home');
+        } else {
+          final error = response['error'] ?? response['message'] ?? 'Erreur inconnue';
+          print('[AUTO-LOGIN] Erreur: $error');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur auto-login: $error')),
+          );
+          context.go('/login');
+        }
+      }
+    } catch (e) {
+      print('[AUTO-LOGIN] Exception: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur connexion: $e')),
+        );
+        context.go('/login');
+      }
     }
   }
 

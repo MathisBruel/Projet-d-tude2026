@@ -72,3 +72,35 @@ def get_recent_weather_averages(lat: float, lng: float, days_back: int = 30) -> 
         "rainfall_mm_30d":        rainfall_30d,
         "rainfall_mm_annual_est": annual_est,
     }
+
+
+def get_current_and_forecast(lat: float, lng: float, days: int = 7) -> dict:
+    """
+    Retourne la météo actuelle + prévisions journalières sur `days` jours.
+
+    Inclut :
+        current_weather  — température, vitesse vent, code WMO
+        daily            — temp max/min, précipitations, code WMO par jour
+        hourly           — humidité relative (pour la valeur courante)
+    """
+    params = {
+        "latitude":        lat,
+        "longitude":       lng,
+        "current_weather": True,
+        "daily": [
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "windspeed_10m_max",
+            "weathercode",
+        ],
+        "hourly": [
+            "relative_humidity_2m",
+            "apparent_temperature",
+        ],
+        "forecast_days": min(max(days, 1), 16),
+        "timezone":       "auto",
+    }
+    resp = requests.get(_FORECAST_URL, params=params, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()

@@ -20,6 +20,7 @@ def create_app():
     from .routes.profile import profile_bp
     from .routes.predictions import predictions_bp
     from .routes.alerts import alerts_bp
+    from .routes.weather import weather_bp
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(parcels_bp, url_prefix='/api/v1/parcels')
@@ -27,6 +28,7 @@ def create_app():
     app.register_blueprint(profile_bp)
     app.register_blueprint(predictions_bp, url_prefix='/api/v1/predictions')
     app.register_blueprint(alerts_bp, url_prefix='/api/v1/alerts')
+    app.register_blueprint(weather_bp)
 
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)

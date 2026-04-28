@@ -61,7 +61,7 @@ def get_parcels():
     parcels_data = list(db.parcels.find({"user_id": user_id}))
     parcels = [Parcel.from_mongo(p).to_dict() for p in parcels_data]
 
-    return jsonify({"parcels": parcels}), 200
+    return jsonify({"data": parcels}), 200
 
 
 @parcels_bp.route('', methods=['POST'])
@@ -96,7 +96,7 @@ def create_parcel():
 
         return jsonify({
             "message": "Parcelle créée avec succès",
-            "parcel": new_parcel.to_dict()
+            "data": new_parcel.to_dict()
         }), 201
 
     except Exception as e:
@@ -120,7 +120,7 @@ def get_parcel(parcel_id):
             return jsonify({"error": "Parcelle non trouvée"}), 404
 
         parcel = Parcel.from_mongo(parcel_data)
-        return jsonify({"parcel": parcel.to_dict()}), 200
+        return jsonify({"data": parcel.to_dict()}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -171,7 +171,7 @@ def update_parcel(parcel_id):
 
         return jsonify({
             "message": "Parcelle mise à jour avec succès",
-            "parcel": parcel.to_dict()
+            "data": parcel.to_dict()
         }), 200
 
     except Exception as e:

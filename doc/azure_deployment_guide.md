@@ -1,6 +1,6 @@
-# Guide de déploiement Azure — AgriSense
+# Guide de déploiement Azure VPS — AgriSense v2
 
-> Déployer l'application Flask sur Azure Container Apps via l'interface web (portail.azure.com)
+> Déployer l'application Flask sur un VPS avec Docker, en utilisant Azure Container Registry pour stocker les images
 
 ---
 
@@ -17,7 +17,7 @@
    - **Région** : `France Central` (ou `East US` si Fr indisponible)
 6. Cliquer sur **Vérifier + créer** → **Créer**
 
-✅ Le groupe de ressources est créé. Vous pouvez y créer d'autres ressources maintenant.
+✅ Le groupe de ressources est créé.
 
 ---
 
@@ -36,7 +36,7 @@
    - **Accès administrateur** : cocher **Activer**
 5. Cliquer sur **Vérifier + créer** → **Créer**
 
-✅ Le registre est créé. Vous pourrez y pusher vos images Docker.
+✅ Le registre est créé.
 
 ### Récupérer les identifiants de connexion
 1. Aller à votre registre fraîchement créé
@@ -46,7 +46,7 @@
    - **Nom d'utilisateur**
    - **Mot de passe** (cliquer sur l'œil pour voir)
 
-💾 Garder ces infos pour le push Docker local.
+💾 **Garder ces infos pour le push Docker local et pour le VPS.**
 
 ---
 
@@ -59,18 +59,18 @@
 ### Étapes
 1. Sur votre machine locale, ouvrir **Terminal / PowerShell / Bash**
 2. Se connecter à Azure Container Registry:
-   ```
+   ```bash
    docker login agrisenseregistry.azurecr.io
    ```
    - Entrer le **nom d'utilisateur** et **mot de passe** récupérés ci-dessus
 
 3. Tagger l'image Docker:
-   ```
+   ```bash
    docker tag agrisense-backend agrisenseregistry.azurecr.io/agrisense-backend:latest
    ```
 
 4. Pusher l'image:
-   ```
+   ```bash
    docker push agrisenseregistry.azurecr.io/agrisense-backend:latest
    ```
 
@@ -83,160 +83,243 @@
 
 ---
 
-## 4. Créer un coffre de clés (Azure Key Vault) — **Optionnel mais recommandé**
+## 4. Louer/configurer un VPS
+
+### Choix du VPS
+Vous pouvez utiliser n'importe quel fournisseur (OVH, Linode, DigitalOcean, Hetzner, etc.).
+
+**Configuration recommandée:**
+- **OS**: Ubuntu 22.04 LTS (ou plus récent)
+- **CPU**: 2 cœurs minimum
+- **RAM**: 2-4 GB minimum
+- **Stockage**: 20-30 GB SSD minimum
+- **IP publique**: Requise
+
+### Prérequis avant de continuer
+- Avoir accès SSH au VPS (clé privée + IP publique)
+- Être capable de se connecter: `ssh root@votre-ip-vps`
+
+---
+
+## 5. Installer Docker sur le VPS
 
 ### Étapes
-1. **Portail Azure** → **+ Créer une ressource**
-2. Rechercher **« Coffre de clés »** (Key Vault)
-3. Cliquer sur **Créer**
-4. Remplir le formulaire:
-   - **Abonnement** : même abonnement
-   - **Groupe de ressources** : `agrisense-rg`
-   - **Nom du coffre** : `agrisense-kv`
-   - **Localisation** : même région
-   - **Plan tarifaire** : `Standard`
-5. Cliquer sur **Vérifier + créer** → **Créer**
+1. Se connecter au VPS via SSH:
+   ```bash
+   ssh root@votre-ip-vps
+   ```
 
-✅ Coffre créé. Passez à l'étape 5 pour ajouter les secrets.
+2. Mettre à jour les paquets:
+   ```bash
+   apt update && apt upgrade -y
+   ```
 
----
+3. Installer Docker (et Docker Compose):
+   ```bash
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sh get-docker.sh
+   ```
 
-## 5. Ajouter les variables d'environnement (secrets)
+4. Vérifier l'installation:
+   ```bash
+   docker --version
+   docker compose --version
+   ```
 
-### Secrets à créer
-- `MONGO_URI` : `mongodb+srv://...`
-- `GEMINI_API_KEY` : clé d'API Google AI Studio
-- `GOOGLE_MAPS_API_KEY` : clé d'API Google Cloud
-- `JWT_SECRET` : une chaîne aléatoire sécurisée (ex. UUID ou résultat d'OpenSSL)
-- `FLASK_ENV` : `production`
-
-### Option A: Via Azure Key Vault (recommandé)
-
-1. Aller à votre **Key Vault** → **agrisense-kv**
-2. Menu gauche → **Secrets**
-3. Cliquer sur **+ Générer/Importer** (pour chaque secret)
-4. Remplir:
-   - **Nom** : ex. `mongo-uri`
-   - **Valeur** : ex. `mongodb+srv://...`
-5. Cliquer sur **Créer**
-
-Répéter pour chaque secret (MONGO_URI, GEMINI_API_KEY, GOOGLE_MAPS_API_KEY, JWT_SECRET).
-
-✅ Les secrets sont maintenant stockés en toute sécurité dans le coffre.
-
-### Option B: Passer directement aux Container Apps (plus simple)
-Vous pouvez aussi ajouter les variables lors de la création des Container Apps (étape 6). Moins sécurisé mais valide pour un projet d'études.
+✅ Docker est maintenant installé sur le VPS.
 
 ---
 
-## 6. Créer et déployer l'application sur Container Apps
+## 6. Configurer les identifiants ACR sur le VPS
+
+### Créer un fichier `.env` sur le VPS
+
+1. Sur le VPS, créer un répertoire de travail:
+   ```bash
+   mkdir -p /root/agrisense
+   cd /root/agrisense
+   ```
+
+2. Créer un fichier `.env` avec les secrets:
+   ```bash
+   cat > /root/agrisense/.env << 'EOF'
+   MONGO_URI=mongodb+srv://utilisateur:motdepasse@cluster.mongodb.net/agrisense
+   GEMINI_API_KEY=votre-clé-gemini
+   GOOGLE_MAPS_API_KEY=votre-clé-google-maps
+   JWT_SECRET=votre-secret-jwt-aléatoire
+   FLASK_ENV=production
+   EOF
+   ```
+
+3. Restreindre les permissions:
+   ```bash
+   chmod 600 /root/agrisense/.env
+   ```
+
+💾 **Les secrets sont maintenant sécurisés sur le VPS.**
+
+---
+
+## 7. Se connecter à Azure Container Registry depuis le VPS
 
 ### Étapes
-1. **Portail Azure** → **+ Créer une ressource**
-2. Rechercher **« Container Apps »**
-3. Cliquer sur **Créer**
+1. Sur le VPS, se connecter à ACR:
+   ```bash
+   docker login agrisenseregistry.azurecr.io
+   ```
+   - Entrer le **nom d'utilisateur** et **mot de passe** récupérés à l'étape 2
 
-#### **Onglet "Informations de base"**
-- **Abonnement** : même abonnement
-- **Groupe de ressources** : `agrisense-rg`
-- **Nom de l'application conteneur** : `agrisense-api`
-- **Plan d'hébergement** : `Consommation (serveurs sans état)`
-- **Localisation** : même région
+2. Vérifier la connexion:
+   ```bash
+   docker pull agrisenseregistry.azurecr.io/agrisense-backend:latest
+   ```
 
-Cliquer sur **Suivant : Registre de conteneurs >**
-
-#### **Onglet "Registre de conteneurs"**
-- **Source d'image** : sélectionner **Azure Container Registry**
-- **Registre** : `agrisenseregistry`
-- **Image** : `agrisense-backend`
-- **Balise d'image** : `latest`
-
-Cliquer sur **Suivant : Authentification >**
-
-#### **Onglet "Authentification"**
-- **Authentification du registre** : cocher **Oui** (pour puller depuis ACR)
-- L'authentification se fait automatiquement
-
-Cliquer sur **Suivant : Ingress >**
-
-#### **Onglet "Ingress"**
-- **Entrée** : cocher **Activer**
-- **Mode Ingress** : sélectionner **Externe** (accès public)
-- **Port cible** : `5000` (port Flask)
-- **Protocole** : `HTTP`
-
-Cliquer sur **Suivant : Variables d'environnement >**
-
-#### **Onglet "Variables d'environnement"**
-
-Ajouter les variables en cliquant sur **+ Ajouter**:
-
-| Nom | Valeur | Type |
-|---|---|---|
-| `MONGO_URI` | `mongodb+srv://...` | Texte brut |
-| `GEMINI_API_KEY` | `...` | **Secret** (cocher "Secret") |
-| `GOOGLE_MAPS_API_KEY` | `...` | **Secret** |
-| `JWT_SECRET` | `...` | **Secret** |
-| `FLASK_ENV` | `production` | Texte brut |
-
-**OU** si vous avez créé un Key Vault:
-- Utiliser le type **Référence du coffre de clés** au lieu de passer les valeurs directement
-- Sélectionner le coffre `agrisense-kv` et le nom du secret
-
-Cliquer sur **Vérifier + créer**
-
-#### **Onglet "Résumé"**
-- Vérifier que tout est correct
-- Cliquer sur **Créer**
-
-⏳ Attendre 2-5 minutes que l'application soit déployée.
-
-✅ **Vous verrez "Déploiement réussi"** quand c'est prêt.
+✅ L'image Docker est maintenant téléchargée sur le VPS.
 
 ---
 
-## 7. Récupérer l'URL de l'application
+## 8. Lancer le conteneur Docker sur le VPS
 
-### Étapes
-1. Aller à votre **Container App** → **agrisense-api**
-2. Dans le panneau **Vue d'ensemble** (Essentials)
-3. Copier **l'URL d'application** (ex. `https://agrisense-api.xxx.azurecontainerapps.io`)
+### Option A: Via Docker Compose (recommandé)
 
-💾 Cette URL sera utilisée comme `API_URL` dans Flutter
+1. Sur le VPS, créer un fichier `docker-compose.yml`:
+   ```bash
+   cat > /root/agrisense/docker-compose.yml << 'EOF'
+   version: '3.8'
+   services:
+     agrisense-api:
+       image: agrisenseregistry.azurecr.io/agrisense-backend:latest
+       container_name: agrisense-api
+       restart: always
+       ports:
+         - "5000:5000"
+       env_file:
+         - .env
+       networks:
+         - agrisense-network
+   networks:
+     agrisense-network:
+       driver: bridge
+   EOF
+   ```
+
+2. Lancer le conteneur:
+   ```bash
+   cd /root/agrisense
+   docker compose up -d
+   ```
+
+3. Vérifier que le conteneur fonctionne:
+   ```bash
+   docker ps
+   docker logs agrisense-api
+   ```
+
+✅ L'API fonctionne maintenant sur `http://votre-ip-vps:5000`
+
+### Option B: Via ligne de commande Docker
+
+Si vous préférez une commande unique:
+```bash
+docker run -d \
+  --name agrisense-api \
+  --restart always \
+  --env-file /root/agrisense/.env \
+  -p 5000:5000 \
+  agrisenseregistry.azurecr.io/agrisense-backend:latest
+```
 
 ---
 
-## 8. Vérifier que l'API répond
+## 9. Assurer la persistance du conteneur (systemd service)
 
-### Via navigateur
+### Créer un service systemd pour Docker Compose
+
+1. Créer un fichier service:
+   ```bash
+   sudo tee /etc/systemd/system/agrisense.service > /dev/null << 'EOF'
+   [Unit]
+   Description=AgriSense API with Docker Compose
+   After=docker.service
+   Requires=docker.service
+
+   [Service]
+   Type=oneshot
+   RemainAfterExit=yes
+   WorkingDirectory=/root/agrisense
+   ExecStart=/usr/local/bin/docker compose up -d
+   ExecStop=/usr/local/bin/docker compose down
+   Restart=on-failure
+   RestartSec=10
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+   ```
+
+2. Activer et démarrer le service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable agrisense.service
+   sudo systemctl start agrisense.service
+   ```
+
+3. Vérifier le statut:
+   ```bash
+   sudo systemctl status agrisense.service
+   ```
+
+✅ Le conteneur redémarrera automatiquement après un reboot du VPS.
+
+---
+
+## 10. Ouvrir les ports firewall
+
+### Si vous avez un firewall (UFW)
+
+```bash
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 5000/tcp  # Flask API
+sudo ufw enable
+```
+
+### Vérifier l'accès depuis l'extérieur
+
 1. Ouvrir un navigateur
-2. Aller à: `https://agrisense-api.xxx.azurecontainerapps.io/api/v1/health`
+2. Aller à: `http://votre-ip-vps:5000/api/v1/health`
 3. Vous devez voir une réponse JSON (ex. `{"status": "ok"}`)
 
-### Via Postman ou cURL
-```
-GET https://agrisense-api.xxx.azurecontainerapps.io/api/v1/health
-```
-
-✅ Si vous voyez une réponse, l'API fonctionne!
+✅ L'API est accessible depuis l'extérieur.
 
 ---
 
-## 9. Consulter les logs de l'application
+## 11. Configurer un domaine (optionnel)
 
-### Étapes
-1. Aller à votre **Container App** → **agrisense-api**
-2. Menu gauche → **Flux de console**
-3. Vous verrez les logs en temps réel de votre Flask
+### Si vous avez un domaine enregistré
+1. Pointer le domaine vers votre IP VPS (via votre registrar DNS)
+2. Attendre la propagation DNS (15 min à 48 h)
+3. Accéder via: `http://votre-domaine.com:5000`
 
-**En cas d'erreur:**
-- Vérifier que les variables d'environnement sont correctes
-- Vérifier que MongoDB Atlas est accessible depuis Azure
-- Vérifier que les clés d'API (Gemini, Google Maps) sont valides
+### Configurer HTTPS (Certbot + Nginx)
+
+Pour sécuriser avec HTTPS, vous pouvez installer un reverse proxy Nginx:
+
+```bash
+# Installer Nginx
+sudo apt install nginx -y
+
+# Installer Certbot
+sudo apt install certbot python3-certbot-nginx -y
+
+# Configurer le certificat SSL
+sudo certbot certonly --standalone -d votre-domaine.com
+```
+
+Puis créer une configuration Nginx pour proxy vers le conteneur Docker (au-delà du périmètre de ce guide).
 
 ---
 
-## 10. Mettre à jour le `API_URL` dans Flutter
+## 12. Mettre à jour l'`API_URL` dans Flutter
 
 ### Fichier à modifier
 `frontend/lib/core/config/app_config.dart`
@@ -246,27 +329,40 @@ GET https://agrisense-api.xxx.azurecontainerapps.io/api/v1/health
 // Avant
 const String API_URL = "http://localhost:5000";
 
-// Après
-const String API_URL = "https://agrisense-api.xxx.azurecontainerapps.io";
-```
+// Après (remplacer votre-ip-vps par l'IP réelle)
+const String API_URL = "http://votre-ip-vps:5000";
 
-Remplacer `xxx.azurecontainerapps.io` par le domaine réel.
+// OU si vous avez un domaine
+const String API_URL = "http://votre-domaine.com:5000";
+
+// OU si vous avez HTTPS
+const String API_URL = "https://votre-domaine.com";
+```
 
 ✅ Recompiler l'app Flutter et tester.
 
 ---
 
-## 11. Mettre à jour l'image Docker (itérations futures)
+## 13. Mettre à jour l'image Docker (itérations futures)
 
 ### Si vous modifiez le code backend
 1. Localement: `docker build -t agrisenseregistry.azurecr.io/agrisense-backend:v2 ./backend`
 2. Localement: `docker push agrisenseregistry.azurecr.io/agrisense-backend:v2`
-3. **Portail Azure** → **Container App** → **agrisense-api**
-4. Menu → **Conteneurs** → Éditer l'image
-5. Changer la **Balise d'image** de `latest` à `v2`
-6. Cliquer sur **Sauvegarder**
+3. **Sur le VPS:**
+   ```bash
+   cd /root/agrisense
+   # Modifier le tag dans docker-compose.yml
+   sed -i 's/:latest/:v2/g' docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
 
-⏳ Attendre le redéploiement (1-2 min).
+4. Vérifier les logs:
+   ```bash
+   docker logs agrisense-api
+   ```
+
+⏳ Attendre 30 secondes que le conteneur redémarre.
 
 ---
 
@@ -276,14 +372,17 @@ Remplacer `xxx.azurecontainerapps.io` par le domaine réel.
 - [ ] Azure Container Registry créé (`agrisenseregistry`)
 - [ ] Identifiants ACR récupérés
 - [ ] Image Docker pushée vers ACR
-- [ ] Azure Key Vault créé (optionnel)
-- [ ] Secrets ajoutés (MONGO_URI, API keys, JWT_SECRET)
-- [ ] Container App créée et déployée
-- [ ] URL de l'API récupérée
+- [ ] VPS loué et configuré (Ubuntu 22.04+)
+- [ ] Docker installé sur le VPS
+- [ ] Fichier `.env` créé sur le VPS avec tous les secrets
+- [ ] Docker login réussi sur le VPS
+- [ ] Conteneur lancé (docker compose ou docker run)
+- [ ] Firewall ouvert pour le port 5000
 - [ ] Test HTTP réussi (health check)
-- [ ] Logs vérifiés sans erreurs
-- [ ] `API_URL` mis à jour dans Flutter
+- [ ] Service systemd configuré (pour persistance)
+- [ ] `API_URL` mis à jour dans Flutter (IP VPS ou domaine)
 - [ ] App Flutter recompilée et testée
+- [ ] Logs vérifiés sans erreurs (`docker logs agrisense-api`)
 
 ---
 
@@ -291,12 +390,25 @@ Remplacer `xxx.azurecontainerapps.io` par le domaine réel.
 
 | Problème | Solution |
 |---|---|
-| **"Image not found"** dans Container Apps | Vérifier que le nom complet de l'image est correct: `agrisenseregistry.azurecr.io/agrisense-backend:latest` |
-| **Application crash au démarrage** | Vérifier les logs (Flux de console) → problème de config MongoDB ou variables d'environnement |
-| **MongoDB connection timeout** | Vérifier que MongoDB Atlas accepte les connexions depuis Azure (IP whitelist) |
-| **Erreur 401 Unauthorized sur les routes API** | Vérifier que JWT_SECRET est correct et consistant |
-| **API répond mais Flutter ne se connecte** | Vérifier CORS dans Flask, vérifier que `API_URL` dans Flutter n'a pas de trailing `/` |
+| **"Cannot connect to Docker daemon"** | Vérifier que Docker est installé: `docker --version`. Si problème de permissions, utiliser `sudo docker` ou ajouter l'utilisateur au groupe docker: `sudo usermod -aG docker $USER` |
+| **"Unable to find image"** | Vérifier que `docker login` a réussi. Vérifier le nom complet: `agrisenseregistry.azurecr.io/agrisense-backend:latest` |
+| **"Connection refused" sur port 5000** | Vérifier que le conteneur tourne: `docker ps`. Vérifier les logs: `docker logs agrisense-api`. Vérifier le firewall: `sudo ufw status` |
+| **Application crash au démarrage** | Consulter les logs: `docker logs agrisense-api`. Vérifier que les variables d'environnement dans `.env` sont correctes |
+| **MongoDB connection timeout** | Vérifier que MongoDB Atlas accepte les connexions depuis l'IP du VPS (IP whitelist dans Atlas) |
+| **Erreur 401 Unauthorized sur les routes API** | Vérifier que `JWT_SECRET` dans `.env` est correct et identique à celui utilisé en développement |
+| **API répond mais Flutter ne se connecte** | Vérifier CORS dans Flask (`flask-cors`). Vérifier que `API_URL` n'a pas de trailing `/`. Vérifier que le domaine/IP est accessible depuis l'appareil |
+| **Le conteneur s'arrête après chaque reboot du VPS** | Vérifier le service systemd: `sudo systemctl status agrisense.service`. Activer la persistance: `docker compose up -d --restart-policy always` |
 
 ---
 
-**Prochaines étapes :** Une fois en production, envisager un CI/CD automatisé via GitHub Actions pour redeployer à chaque push sur `main`.
+## 📝 Notes importantes
+
+1. **Variables d'environnement sécurisées**: Ne jamais commiter le fichier `.env` dans Git. Ajouter `.env` à `.gitignore`.
+2. **Authentification ACR**: Les identifiants ACR doivent être gardés secrets. Ne pas les mettre dans le code.
+3. **Monitoring**: Installer des outils comme Portainer ou Watchtower pour gérer les conteneurs à distance (optionnel).
+4. **Backups**: Configurer régulièrement des backups de la base MongoDB (Atlas offre une rétention automatique).
+5. **Logs**: Accéder aux logs via `docker logs agrisense-api -f` pour un suivi en temps réel.
+
+---
+
+**Prochaines étapes:** Une fois en production, envisager un CI/CD automatisé via GitHub Actions pour redeployer automatiquement à chaque push sur `main` (script qui build, pousse vers ACR, et redémarre le conteneur sur le VPS via SSH).

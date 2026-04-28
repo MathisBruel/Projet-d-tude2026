@@ -75,6 +75,7 @@ def predict():
     doc = {
         "user_id":             ObjectId(request.user_id),
         "parcel_id":           ObjectId(data["parcel_id"]) if data.get("parcel_id") else None,
+        "culture_type":        culture_type,
         "date":                datetime.utcnow(),
         "weather_data": {
             "source":          weather_src,

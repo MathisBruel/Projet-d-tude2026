@@ -4,7 +4,7 @@ import '../../data/repositories/parcel_repository.dart';
 
 const _kCultures = [
   'Blé tendre', 'Blé dur', 'Maïs', 'Colza', 'Orge',
-  'Tournesol', 'Pomme de terre', 'Betterave', 'Tournesol', 'Sorgho',
+  'Tournesol', 'Pomme de terre', 'Betterave', 'Sorgho',
 ];
 
 const _kSoilTypes = ['Argileux', 'Limoneux', 'Sableux', 'Calcaire', 'Humifère'];

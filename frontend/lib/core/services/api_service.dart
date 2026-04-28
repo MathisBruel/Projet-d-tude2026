@@ -251,4 +251,124 @@ class ApiService {
       return {'error': 'Erreur lors de la recuperation du profil : $e'};
     }
   }
+
+  /// Met à jour le profil utilisateur (first_name, last_name, phone, location_*)
+  static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.put(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/profile'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la mise à jour du profil : $e'};
+    }
+  }
+
+  /// Upload l'avatar de profil
+  static Future<Map<String, dynamic>> uploadAvatar(File imageFile) async {
+    try {
+      final token = await AuthStorageService.getToken();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${AppConfig.apiUrl}/api/v1/profile/avatar'),
+      );
+
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
+
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        return jsonDecode(responseBody);
+      } else {
+        return {'error': 'Erreur HTTP ${response.statusCode}', 'body': responseBody};
+      }
+    } catch (e) {
+      return {'error': 'Erreur lors de l\'upload de l\'avatar : $e'};
+    }
+  }
+
+  /// Récupère la météo actuelle + prévisions 7 jours pour une position GPS
+  static Future<Map<String, dynamic>> getWeather(double lat, double lng) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/weather?lat=$lat&lng=$lng'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur météo : $e'};
+    }
+  }
+
+  /// Génère des alertes agronomiques sur 7 jours pour une position GPS
+  static Future<Map<String, dynamic>> getWeatherAlerts({
+    required double lat,
+    required double lng,
+    String? cultureType,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final body = <String, dynamic>{'lat': lat, 'lng': lng};
+      if (cultureType != null && cultureType.isNotEmpty) {
+        body['culture_type'] = cultureType;
+      }
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/alerts/weather'),
+        headers: headers,
+        body: jsonEncode(body),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur alertes météo : $e'};
+    }
+  }
+
+  /// Récupère l'historique des prédictions
+  static Future<Map<String, dynamic>> getPredictions({int limit = 5}) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/predictions/history?limit=$limit'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur prédictions : $e'};
+    }
+  }
+
+  /// Géocode une adresse via Nominatim (OpenStreetMap, sans clé)
+  static Future<Map<String, dynamic>?> geocodeAddress(String address) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent(address)}&limit=1',
+      );
+      final response = await http.get(uri, headers: {'User-Agent': 'AgriSense/1.0'});
+      final results = jsonDecode(response.body) as List<dynamic>;
+      if (results.isEmpty) return null;
+      final first = results.first as Map<String, dynamic>;
+      // Simplify display_name to city, department/country
+      final displayName = first['display_name'] as String? ?? address;
+      final parts = displayName.split(',');
+      final shortName = parts.take(2).map((s) => s.trim()).join(', ');
+      return {
+        'lat': double.parse(first['lat'] as String),
+        'lng': double.parse(first['lon'] as String),
+        'display_name': shortName,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
 }

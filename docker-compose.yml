@@ -1,14 +1,13 @@
 services:
   backend:
-    build: ./backend
-    image: agrisenseregistry.azurecr.io/agrisense-backend:latest
+    image: ghcr.io/mathisbruel/projet-etudes-2026-backend:latest
     ports:
       - "5001:5000"
     env_file:
       - ./backend/.env
-    volumes:
-      - ./backend:/app
     restart: unless-stopped
+    depends_on:
+      - mongodb
   mongodb:
     image: mongo:latest
     container_name: mongodb

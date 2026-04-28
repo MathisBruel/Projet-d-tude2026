@@ -293,10 +293,18 @@ class _AddParcelPageState extends State<AddParcelPage> {
       );
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      context.pop();
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Parcelle "$name" créée')),
       );
+
+      // Defer pop to allow widget tree to stabilize
+      Future.microtask(() {
+        if (mounted) {
+          context.pop();
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:agrisense/core/services/cache_service.dart';
 import '../../data/models/parcel_model.dart';
 import '../../data/repositories/parcel_repository.dart';
 import '../widgets/parcel_bottom_sheet.dart';
@@ -41,7 +42,21 @@ class _MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
-    _loadParcels();
+    final cache = CacheService();
+    // Load from cache if available
+    if (cache.isMapPageCacheValid()) {
+      final cachedData = cache.getMapPageCache();
+      if (cachedData != null) {
+        setState(() {
+          parcels = cachedData['parcels'] as List<ParcelModel>;
+          _applyFilters();
+          isLoading = false;
+        });
+      }
+    } else {
+      // Load from API if cache is invalid
+      _loadParcels();
+    }
     _requestLocationPermission();
     _searchController.addListener(_applyFilters);
   }
@@ -61,6 +76,10 @@ class _MapPageState extends State<MapPage> {
         parcels = loadedParcels;
         _applyFilters();
         isLoading = false;
+      });
+      // Store in cache for persistence across page navigations
+      CacheService().setMapPageCache({
+        'parcels': loadedParcels,
       });
     } catch (e) {
       setState(() => isLoading = false);
@@ -437,6 +456,22 @@ class _MapPageState extends State<MapPage> {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _loadParcels,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.refresh,
+                            color: Color(0xFF2E7D32),
+                            size: 18,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -470,23 +505,6 @@ class _MapPageState extends State<MapPage> {
               ],
             ),
           ),
-
-          // Carte de proximité — apparaît quand l'utilisateur est à < 500m d'une parcelle
-          if (_nearbyParcel != null)
-            Positioned(
-              bottom: 170,
-              left: 16,
-              right: 72,
-              child: _ProximityCard(
-                parcel: _nearbyParcel!,
-                distanceM: _nearbyDistanceM!,
-                onTap: () => _showParcelDetails(_nearbyParcel!),
-                onDismiss: () => setState(() {
-                  _nearbyParcel = null;
-                  _nearbyDistanceM = null;
-                }),
-              ),
-            ),
 
           // Legend
           Positioned(
@@ -537,8 +555,8 @@ class _MapPageState extends State<MapPage> {
               child: const Icon(Icons.add, color: Colors.white),
             ),
           ),
-        ],
-      ),
+          ],
+        ),
       ),
       bottomNavigationBar: const BottomNavBar(activeTab: 'map'),
     );
@@ -714,23 +732,17 @@ class _ProximityCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Row(
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
                       children: [
                         _MiniChip('🌾 ${parcel.cultureType}'),
-                        const SizedBox(width: 4),
                         _MiniChip('📏 ${parcel.areaHa} ha'),
-                        const SizedBox(width: 4),
                         _MiniChip('📍 $_distanceLabel'),
                       ],
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: Color(0xFF2E7D32)),
-                onPressed: onTap,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Color(0xFF90A4AE), size: 16),

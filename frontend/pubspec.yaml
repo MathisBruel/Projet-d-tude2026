@@ -38,6 +38,9 @@ dependencies:
   # Photos (galerie + camera)
   image_picker: ^1.0.7
 
+  # Accès aux répertoires de l'app
+  path_provider: ^2.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
