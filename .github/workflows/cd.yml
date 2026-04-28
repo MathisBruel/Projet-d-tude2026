@@ -1,0 +1,131 @@
+name: CD - Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_run:
+    workflows: ["CI - Build & Test"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check-ci:
+    name: Check CI Status
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push'
+
+    steps:
+      - name: Check if CI passed
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "❌ CI Pipeline failed, skipping deployment"
+            exit 1
+          fi
+          echo "✅ CI Pipeline passed"
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: []
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy docker-compose.yml to VPS
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          source: "docker-compose.yml"
+          target: "${{ secrets.VPS_DEPLOY_PATH }}"
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            echo "🚀 Starting deployment to VPS..."
+
+            # Navigate to deployment directory
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+
+            # Authenticate with Docker
+            echo "🔐 Authenticating with GitHub Container Registry..."
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull latest images
+            echo "⬇️  Pulling latest Docker images..."
+            docker compose pull
+
+            # Start containers
+            echo "🐳 Starting containers..."
+            docker compose up -d
+
+            # Verify deployment
+            echo "✅ Verifying deployment..."
+            sleep 5
+
+            # Check if backend is responding
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/health || echo "000")
+            if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "404" ]; then
+              echo "✅ Backend is responding (HTTP $RESPONSE)"
+            else
+              echo "⚠️  Backend check returned HTTP $RESPONSE"
+              docker compose logs backend --tail=20
+            fi
+
+            # Logout from Docker
+            docker logout ghcr.io
+
+            echo ""
+            echo "✅ Deployment completed successfully!"
+            echo ""
+            echo "📋 Running containers:"
+            docker compose ps
+            echo ""
+            echo "🔗 Backend URL: http://${{ secrets.VPS_HOST }}:5001"
+
+      - name: Deployment Success
+        run: |
+          echo "✅ VPS Deployment Successful"
+          echo ""
+          echo "📊 Deployment Info:"
+          echo "  Repository: ${{ github.repository }}"
+          echo "  Branch: ${{ github.ref }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo "  Actor: ${{ github.actor }}"
+          echo ""
+          echo "🔗 View workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "❌ VPS Deployment Failed"
+          echo ""
+          echo "📊 Debug Info:"
+          echo "  Repository: ${{ github.repository }}"
+          echo "  Branch: ${{ github.ref }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo ""
+          echo "📝 Check the VPS logs:"
+          echo "  docker compose logs -f backend"
+          echo ""
+          echo "🔗 View workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
