@@ -1,9 +1,6 @@
 name: CD - Deploy to VPS
 
 on:
-  push:
-    branches:
-      - main
   workflow_run:
     workflows: ["CI - Build & Test"]
     types: [completed]
@@ -14,22 +11,27 @@ jobs:
   check-ci:
     name: Check CI Status
     runs-on: ubuntu-latest
-    if: github.event_name != 'push'
 
     steps:
       - name: Check if CI passed
         run: |
+          echo "🔍 Checking CI workflow status..."
+          echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+
           if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
-            echo "❌ CI Pipeline failed, skipping deployment"
+            echo "❌ CI Pipeline failed!"
+            echo "CI workflow: ${{ github.event.workflow_run.name }}"
+            echo "CI run ID: ${{ github.event.workflow_run.id }}"
             exit 1
           fi
-          echo "✅ CI Pipeline passed"
+
+          echo "✅ CI Pipeline passed - proceeding with deployment"
 
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: []
+    needs: [check-ci]
+    if: github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout code

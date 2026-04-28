@@ -59,6 +59,12 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:buildcache,mode=max
 
+      - name: Display backend image info
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "✅ Backend image pushed:"
+          echo "Tags: ${{ steps.meta.outputs.tags }}"
+
       - name: Build test (PR only - no push)
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v5
