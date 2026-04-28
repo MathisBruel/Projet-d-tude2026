@@ -137,22 +137,22 @@ jobs:
     if: always()
 
     steps:
-      - name: Check CI Status
+      - name: Report CI Status
         run: |
-          echo "✅ CI Pipeline Complete"
+          echo "📊 CI Pipeline Summary"
+          echo "====================="
           echo ""
-          echo "Build Status:"
-          echo "  Backend: ${{ needs.build-backend.result }}"
-          echo "  Frontend: ${{ needs.build-frontend.result }}"
+          echo "Build Backend: ${{ needs.build-backend.result }}"
+          echo "Lint Backend: ${{ needs.lint-backend.result }}"
+          echo "Lint Frontend: ${{ needs.lint-frontend.result }}"
           echo ""
-          echo "Lint Status:"
-          echo "  Backend: ${{ needs.lint-backend.result }}"
-          echo "  Frontend: ${{ needs.lint-frontend.result }}"
 
-      - name: Report failures
-        if: failure()
-        run: |
-          echo "❌ CI Pipeline failed"
-          echo ""
-          echo "Check the logs above for details"
-          exit 1
+          # Check if any failed
+          if [ "${{ needs.build-backend.result }}" = "failure" ] || \
+             [ "${{ needs.lint-backend.result }}" = "failure" ] || \
+             [ "${{ needs.lint-frontend.result }}" = "failure" ]; then
+            echo "❌ CI Pipeline FAILED"
+            exit 1
+          else
+            echo "✅ CI Pipeline PASSED"
+          fi

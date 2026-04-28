@@ -30,6 +30,9 @@ fi
 DEPLOY_PATH="${VPS_DEPLOY_PATH:=/opt/agrisense}"
 echo "📁 Création du répertoire de déploiement: $DEPLOY_PATH"
 mkdir -p "$DEPLOY_PATH"
+mkdir -p "$DEPLOY_PATH/backend"
+mkdir -p "$DEPLOY_PATH/data"
+chmod -R 755 "$DEPLOY_PATH"
 
 # 4. Créer un .gitkeep pour tracker le répertoire (pas de repo git nécessaire)
 touch "$DEPLOY_PATH/.gitkeep"
