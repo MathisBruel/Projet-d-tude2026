@@ -335,7 +335,7 @@ class ApiService {
   }
 
   /// Récupère l'historique des prédictions
-  static Future<Map<String, dynamic>> getPredictions({int limit = 5}) async {
+  static Future<Map<String, dynamic>> getPredictions({int limit = 20}) async {
     try {
       final headers = await _authHeaders();
       final response = await http.get(
@@ -345,6 +345,49 @@ class ApiService {
       return jsonDecode(response.body);
     } catch (e) {
       return {'error': 'Erreur prédictions : $e'};
+    }
+  }
+
+  /// Lance une prédiction de rendement IA
+  static Future<Map<String, dynamic>> predict({
+    required double lat,
+    required double lng,
+    required String cultureType,
+    String? parcelId,
+    double? pesticidesTonnes,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final body = <String, dynamic>{
+        'lat': lat,
+        'lng': lng,
+        'culture_type': cultureType,
+      };
+      if (parcelId != null) body['parcel_id'] = parcelId;
+      if (pesticidesTonnes != null) body['pesticides_tonnes'] = pesticidesTonnes;
+
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/predictions/predict'),
+        headers: headers,
+        body: jsonEncode(body),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur prédiction IA : $e'};
+    }
+  }
+
+  /// Récupère la liste des cultures supportées par le modèle ML
+  static Future<Map<String, dynamic>> getSupportedCrops() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/predictions/crops'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur récupération cultures : $e'};
     }
   }
 

@@ -49,7 +49,7 @@ def load_and_clean(path: str) -> pd.DataFrame:
     if "yield_hg_ha" not in df.columns:
         sys.exit("Colonne 'hg/ha_yield' introuvable dans le CSV.")
 
-    df[TARGET] = df["yield_hg_ha"] / 10000  # hg/ha → t/ha
+    df.loc[:, TARGET] = df["yield_hg_ha"] / 10000  # hg/ha → t/ha
 
     required = FEATURES + [TARGET]
     df = df.dropna(subset=required)
