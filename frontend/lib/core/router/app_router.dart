@@ -9,6 +9,8 @@ import 'package:agrisense/features/map/presentation/pages/map_page.dart';
 import 'package:agrisense/features/map/presentation/pages/add_parcel_page.dart';
 import 'package:agrisense/features/predict/presentation/pages/predict_page.dart';
 import 'package:agrisense/features/community/presentation/pages/community_page.dart';
+import 'package:agrisense/features/community/presentation/pages/community_detail_page.dart';
+import 'package:agrisense/features/community/presentation/pages/community_create_page.dart';
 import 'package:agrisense/features/profile/presentation/pages/profile_page.dart';
 
 class AppRouter {
@@ -50,6 +52,17 @@ class AppRouter {
       GoRoute(
         path: '/community',
         builder: (context, state) => const CommunityPage(),
+      ),
+      GoRoute(
+        path: '/community/create',
+        builder: (context, state) => const CommunityCreatePage(),
+      ),
+      GoRoute(
+        path: '/community/post/:id',
+        builder: (context, state) {
+          final postId = state.pathParameters['id'] ?? '';
+          return CommunityDetailPage(postId: postId, post: state.extra);
+        },
       ),
       GoRoute(
         path: '/profile',

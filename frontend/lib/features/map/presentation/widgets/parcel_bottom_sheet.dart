@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import '../../data/models/parcel_model.dart';
 import '../../data/repositories/parcel_repository.dart';
 
+const _kCultures = [
+  'Blé tendre', 'Blé dur', 'Maïs', 'Colza', 'Orge',
+  'Tournesol', 'Pomme de terre', 'Betterave', 'Tournesol', 'Sorgho',
+];
+
+const _kSoilTypes = ['Argileux', 'Limoneux', 'Sableux', 'Calcaire', 'Humifère'];
+
 class ParcelBottomSheet extends StatefulWidget {
   final ParcelModel parcel;
   final VoidCallback onParcelUpdated;
@@ -259,10 +266,7 @@ class _ParcelBottomSheetState extends State<ParcelBottomSheet> {
                     child: _ActionButton(
                       icon: Icons.edit,
                       label: 'Modifier',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        // context.go('/map/edit/${widget.parcel.id}');
-                      },
+                      onPressed: () => _openEditSheet(context),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -279,6 +283,23 @@ class _ParcelBottomSheetState extends State<ParcelBottomSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _openEditSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => _ParcelEditSheet(
+        parcel: widget.parcel,
+        onSaved: () {
+          Navigator.pop(context); // ferme le bottom sheet de détail
+          widget.onParcelUpdated();
+        },
       ),
     );
   }
@@ -462,6 +483,215 @@ class _ActionButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formulaire d'édition d'une parcelle
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ParcelEditSheet extends StatefulWidget {
+  final ParcelModel parcel;
+  final VoidCallback onSaved;
+
+  const _ParcelEditSheet({required this.parcel, required this.onSaved});
+
+  @override
+  State<_ParcelEditSheet> createState() => _ParcelEditSheetState();
+}
+
+class _ParcelEditSheetState extends State<_ParcelEditSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameCtrl;
+  late TextEditingController _regionCtrl;
+  late String? _selectedCulture;
+  late String? _selectedSoil;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl    = TextEditingController(text: widget.parcel.name);
+    _regionCtrl  = TextEditingController(text: widget.parcel.region ?? '');
+    _selectedCulture = _kCultures.contains(widget.parcel.cultureType)
+        ? widget.parcel.cultureType
+        : null;
+    _selectedSoil = _kSoilTypes.contains(widget.parcel.soilType)
+        ? widget.parcel.soilType
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _regionCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await ParcelRepository.updateParcel(
+        widget.parcel.id,
+        name: _nameCtrl.text.trim(),
+        cultureType: _selectedCulture,
+        soilType: _selectedSoil,
+        region: _regionCtrl.text.trim().isEmpty ? null : _regionCtrl.text.trim(),
+      );
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onSaved();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Parcelle mise à jour')),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48, height: 5,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECEFF1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Modifier la parcelle',
+                  style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700,
+                    color: Color(0xFF1C2B2D), letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Nom
+                _FieldLabel('Nom de la parcelle'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _nameCtrl,
+                  decoration: _inputDeco('Ex : Champ Nord'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Type de culture
+                _FieldLabel('Type de culture'),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _selectedCulture,
+                  decoration: _inputDeco('Sélectionner une culture'),
+                  items: _kCultures.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setState(() => _selectedCulture = v),
+                ),
+                const SizedBox(height: 16),
+
+                // Type de sol
+                _FieldLabel('Type de sol (optionnel)'),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _selectedSoil,
+                  decoration: _inputDeco('Sélectionner un type de sol'),
+                  items: _kSoilTypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (v) => setState(() => _selectedSoil = v),
+                ),
+                const SizedBox(height: 16),
+
+                // Région
+                _FieldLabel('Région (optionnel)'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _regionCtrl,
+                  decoration: _inputDeco('Ex : Île-de-France'),
+                ),
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text(
+                            'Enregistrer',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDeco(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(color: Color(0xFF90A4AE), fontSize: 14),
+    filled: true,
+    fillColor: const Color(0xFFF5F7F8),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 1.5),
+    ),
+  );
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1C2B2D),
       ),
     );
   }

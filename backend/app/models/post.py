@@ -14,14 +14,24 @@ class Reply:
             "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at
         }
 
+    def to_mongo(self):
+        return {
+            "user_id": self.user_id,
+            "content": self.content,
+            "created_at": self.created_at
+        }
+
 class Post:
-    def __init__(self, user_id, title, content, tags=None, replies=None, _id=None, created_at=None, updated_at=None):
+    def __init__(self, user_id, title, content, tags=None, replies=None, likes_count=0, liked_by=None, image_url=None, _id=None, created_at=None, updated_at=None):
         self._id = ObjectId(_id) if _id else None
         self.user_id = ObjectId(user_id) if user_id else None
         self.title = title
         self.content = content
         self.tags = tags or []
         self.replies = replies or [] # List of Reply objects
+        self.likes_count = likes_count
+        self.liked_by = liked_by or []
+        self.image_url = image_url
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
 
@@ -33,6 +43,9 @@ class Post:
             "content": self.content,
             "tags": self.tags,
             "replies": [r.to_dict() if hasattr(r, 'to_dict') else r for r in self.replies],
+            "likes_count": self.likes_count,
+            "liked_by": self.liked_by,
+            "image_url": self.image_url,
             "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             "updated_at": self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at
         }
@@ -43,6 +56,9 @@ class Post:
             "title": self.title,
             "content": self.content,
             "tags": self.tags,
+            "likes_count": self.likes_count,
+            "liked_by": self.liked_by,
+            "image_url": self.image_url,
             "replies": [
                 {
                     "user_id": r.user_id,
@@ -71,6 +87,9 @@ class Post:
             content=data.get('content'),
             tags=data.get('tags'),
             replies=replies,
+            likes_count=data.get('likes_count', 0),
+            liked_by=data.get('liked_by', []),
+            image_url=data.get('image_url'),
             _id=data.get('_id'),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at')

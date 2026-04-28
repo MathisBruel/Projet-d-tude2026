@@ -1,4 +1,5 @@
-from flask import Flask
+from flask import Flask, send_from_directory
+import os
 from flask_cors import CORS
 from .config import Config
 from .database import close_db
@@ -8,16 +9,30 @@ from .commands import init_db_command
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, '..', 'uploads')
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     CORS(app)
 
     from .routes.health import health_bp
     from .routes.auth import auth_bp
     from .routes.parcels import parcels_bp
+    from .routes.community import community_bp
+    from .routes.profile import profile_bp
+    from .routes.predictions import predictions_bp
+    from .routes.alerts import alerts_bp
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(parcels_bp, url_prefix='/api/v1/parcels')
+    app.register_blueprint(community_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(predictions_bp, url_prefix='/api/v1/predictions')
+    app.register_blueprint(alerts_bp, url_prefix='/api/v1/alerts')
 
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+
+    @app.route('/uploads/<path:filename>')
+    def serve_upload(filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
     return app

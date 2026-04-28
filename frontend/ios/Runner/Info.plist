@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Autoriser l'accès a la camera pour ajouter une photo a un post.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Autoriser l'accès a la phototheque pour ajouter une photo a un post.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Autoriser l'enregistrement de photos pour ajouter une image a un post.</string>
 </dict>
 </plist>

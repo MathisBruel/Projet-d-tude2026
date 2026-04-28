@@ -9,7 +9,8 @@
       "Bash(flutter run *)",
       "Bash(tee /tmp/flutter_run.log)",
       "Read(//tmp/**)",
-      "Bash(flutter devices *)"
+      "Bash(flutter devices *)",
+      "Bash(flutter analyze *)"
     ]
   }
 }

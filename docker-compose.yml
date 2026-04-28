@@ -1,6 +1,7 @@
 services:
   backend:
     build: ./backend
+    image: agrisenseregistry.azurecr.io/agrisense-backend:latest
     ports:
       - "5001:5000"
     env_file:

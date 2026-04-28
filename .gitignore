@@ -34,3 +34,8 @@ frontend/ios/Flutter/.last_build_id
 
 # Docker Volumes
 data/
+
+# ML artifacts (générés par train.py, ne pas committer)
+backend/ml/model.pkl
+backend/ml/known_crops.pkl
+backend/ml/yield_df.csv

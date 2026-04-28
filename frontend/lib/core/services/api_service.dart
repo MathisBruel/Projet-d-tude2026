@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import 'auth_storage_service.dart';
@@ -136,6 +137,118 @@ class ApiService {
       return jsonDecode(response.body);
     } catch (e) {
       return {'error': 'Erreur lors de la suppression de la parcelle : $e'};
+    }
+  }
+
+  /// Récupère les posts de la communauté
+  static Future<Map<String, dynamic>> getCommunityPosts({String? tag, String? search}) async {
+    try {
+      final headers = await _authHeaders();
+      final queryParameters = <String, String>{};
+      if (tag != null && tag.isNotEmpty) {
+        queryParameters['tag'] = tag;
+      }
+      if (search != null && search.isNotEmpty) {
+        queryParameters['search'] = search;
+      }
+      final uri = Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts')
+          .replace(queryParameters: queryParameters.isEmpty ? null : queryParameters);
+      final response = await http.get(uri, headers: headers);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la récupération des posts : $e'};
+    }
+  }
+
+  /// Récupère le détail d'un post
+  static Future<Map<String, dynamic>> getCommunityPost(String postId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts/$postId'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la récupération du post : $e'};
+    }
+  }
+
+  /// Crée un post
+  static Future<Map<String, dynamic>> createCommunityPost(
+    Map<String, dynamic> data, {
+    File? imageFile,
+  }
+  ) async {
+    try {
+      final headers = await _authHeaders();
+      final uri = Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts');
+      final request = http.MultipartRequest('POST', uri);
+
+      if (headers['Authorization'] != null) {
+        request.headers['Authorization'] = headers['Authorization']!;
+      }
+
+      request.fields['title'] = data['title']?.toString() ?? '';
+      request.fields['content'] = data['content']?.toString() ?? '';
+      final tags = (data['tags'] as List<dynamic>? ?? []).map((tag) => tag.toString()).toList();
+      request.fields['tags'] = tags.join(',');
+
+      if (imageFile != null) {
+        request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+      }
+
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la creation du post : $e'};
+    }
+  }
+
+  /// Ajoute une réponse
+  static Future<Map<String, dynamic>> addCommunityReply(
+    String postId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts/$postId/replies'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la reponse : $e'};
+    }
+  }
+
+  /// Ajoute un like sur un post
+  static Future<Map<String, dynamic>> likeCommunityPost(String postId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts/$postId/like'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors du like : $e'};
+    }
+  }
+
+  /// Récupère le profil utilisateur
+  static Future<Map<String, dynamic>> getProfile() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/profile'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la recuperation du profil : $e'};
     }
   }
 }

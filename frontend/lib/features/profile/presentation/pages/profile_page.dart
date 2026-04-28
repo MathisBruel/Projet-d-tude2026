@@ -1,9 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:agrisense/core/theme/app_theme.dart';
+import 'package:agrisense/core/services/api_service.dart';
+import 'package:go_router/go_router.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  late Future<ProfileViewData> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _loadProfile();
+  }
+
+  Future<ProfileViewData> _loadProfile() async {
+    final response = await ApiService.getProfile();
+    if (response['error'] != null) {
+      throw Exception(response['error']);
+    }
+    return ProfileViewData.fromJson(response);
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,43 +39,90 @@ class ProfilePage extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              _HeaderCard(
-                onBack: () => context.pop(),
-                onSettings: () {},
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: FutureBuilder<ProfileViewData>(
+          future: _profileFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Center(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const _SectionTitle('Mon exploitation'),
-                    const SizedBox(height: 8),
-                    const _FarmStatsCard(),
-                    const SizedBox(height: 18),
-                    const _SectionTitle('Mes statistiques'),
-                    const SizedBox(height: 8),
-                    const _StatsCard(),
-                    const SizedBox(height: 16),
-                    _ActionTile(
-                      icon: Icons.edit_outlined,
-                      title: 'Modifier le profil',
-                      onTap: () {},
-                    ),
+                    Icon(Icons.person_off, size: 48, color: AppColors.neutreMedium),
                     const SizedBox(height: 10),
-                    _ActionTile(
-                      icon: Icons.notifications_none,
-                      title: 'Notifications',
-                      trailing: '3 actives',
-                      onTap: () {},
+                    Text(
+                      'Profil indisponible',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => setState(() => _profileFuture = _loadProfile()),
+                      child: const Text('Reessayer'),
                     ),
                   ],
                 ),
+              );
+            }
+
+            final data = snapshot.data!;
+            return SingleChildScrollView(
+              child: Column(
+                children: [
+                  _HeaderCard(
+                    onBack: () => context.pop(),
+                    onSettings: () => _showSnack('Parametres'),
+                    onTap: () => _showSnack('Profil'),
+                    name: data.name,
+                    role: data.roleLabel,
+                    location: data.location,
+                    badgeLabel: data.badgeLabel,
+                    initials: data.initials,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _SectionTitle('Mon exploitation'),
+                        const SizedBox(height: 8),
+                        _FarmStatsCard(
+                          parcels: data.parcelsCount,
+                          areaHa: data.totalAreaHa,
+                          mainCrop: data.mainCrop,
+                          onTap: () => _showSnack('Stats exploitation'),
+                        ),
+                        const SizedBox(height: 18),
+                        const _SectionTitle('Mes statistiques'),
+                        const SizedBox(height: 8),
+                        _StatsCard(
+                          predictionsCount: data.predictionsCount,
+                          avgYield: data.avgYield,
+                          bestParcel: data.bestParcelLabel,
+                          bestYield: data.bestParcelYield,
+                          onTap: (label) => _showSnack(label),
+                        ),
+                        const SizedBox(height: 16),
+                        _ActionTile(
+                          icon: Icons.edit_outlined,
+                          title: 'Modifier le profil',
+                          onTap: () => _showSnack('Modifier le profil'),
+                        ),
+                        const SizedBox(height: 10),
+                        _ActionTile(
+                          icon: Icons.notifications_none,
+                          title: 'Notifications',
+                          trailing: data.notificationsLabel,
+                          onTap: () => _showSnack('Notifications'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -55,10 +130,25 @@ class ProfilePage extends StatelessWidget {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.onBack, required this.onSettings});
+  const _HeaderCard({
+    required this.onBack,
+    required this.onSettings,
+    required this.onTap,
+    required this.name,
+    required this.role,
+    required this.location,
+    required this.badgeLabel,
+    required this.initials,
+  });
 
   final VoidCallback onBack;
   final VoidCallback onSettings;
+  final VoidCallback onTap;
+  final String name;
+  final String role;
+  final String location;
+  final String badgeLabel;
+  final String initials;
 
   @override
   Widget build(BuildContext context) {
@@ -67,111 +157,114 @@ class _HeaderCard extends StatelessWidget {
         bottomLeft: Radius.circular(24),
         bottomRight: Radius.circular(24),
       ),
-      child: Container(
-        height: 240,
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF2E7D32),
-              Color(0xFF1F5F26),
-            ],
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 240,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF2E7D32),
+                Color(0xFF1F5F26),
+              ],
+            ),
           ),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: -30,
-              right: -30,
-              bottom: -40,
-              child: Container(
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(100),
+          child: Stack(
+            children: [
+              Positioned(
+                left: -30,
+                right: -30,
+                bottom: -40,
+                child: Container(
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 12,
-              top: 12,
-              child: _HeaderIconButton(
-                icon: Icons.arrow_back,
-                onTap: onBack,
+              Positioned(
+                left: 12,
+                top: 12,
+                child: _HeaderIconButton(
+                  icon: Icons.arrow_back,
+                  onTap: onBack,
+                ),
               ),
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: _HeaderIconButton(
-                icon: Icons.settings,
-                onTap: onSettings,
+              Positioned(
+                right: 12,
+                top: 12,
+                child: _HeaderIconButton(
+                  icon: Icons.settings,
+                  onTap: onSettings,
+                ),
               ),
-            ),
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircleAvatar(
-                    radius: 34,
-                    backgroundColor: Colors.white,
-                    child: Text(
-                      'PM',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1C2B2D),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 34,
+                      backgroundColor: Colors.white,
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1C2B2D),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Pierre Moreau',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                    const SizedBox(height: 10),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Agriculteur · Beauce, Eure-et-Loir',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 4),
+                    Text(
+                      '$role · $location',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        _StatusDot(),
-                        SizedBox(width: 6),
-                        Text(
-                          'MEMBRE PREMIUM · depuis 2023',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                            color: Colors.white,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _StatusDot(),
+                          const SizedBox(width: 6),
+                          Text(
+                            badgeLabel,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: Colors.white,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -236,30 +329,44 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _FarmStatsCard extends StatelessWidget {
-  const _FarmStatsCard();
+  const _FarmStatsCard({
+    required this.parcels,
+    required this.areaHa,
+    required this.mainCrop,
+    required this.onTap,
+  });
+
+  final String parcels;
+  final String areaHa;
+  final String mainCrop;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          )
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: const [
-          _MetricItem(value: '4', label: 'PARCELLES'),
-          _MetricItem(value: '42.8', label: 'HA TOTAL'),
-          _MetricItem(value: 'BLE TENDRE', label: '', icon: Icons.agriculture_rounded),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 12,
+              offset: Offset(0, 6),
+            )
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _MetricItem(value: parcels, label: 'PARCELLES'),
+            _MetricItem(value: areaHa, label: 'HA TOTAL'),
+            _MetricItem(value: mainCrop, label: '', icon: Icons.agriculture_rounded),
+          ],
+        ),
       ),
     );
   }
@@ -306,7 +413,19 @@ class _MetricItem extends StatelessWidget {
 }
 
 class _StatsCard extends StatelessWidget {
-  const _StatsCard();
+  const _StatsCard({
+    required this.predictionsCount,
+    required this.avgYield,
+    required this.bestParcel,
+    required this.bestYield,
+    required this.onTap,
+  });
+
+  final String predictionsCount;
+  final String avgYield;
+  final String bestParcel;
+  final String bestYield;
+  final ValueChanged<String> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -324,26 +443,29 @@ class _StatsCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        children: const [
+        children: [
           _StatRow(
             icon: Icons.monitor_heart_outlined,
-            title: 'Prédictions lancées',
-            value: '47',
+            title: 'Predictions lancees',
+            value: predictionsCount,
             subtitle: 'cette saison',
+            onTap: () => onTap('Predictions'),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           _StatRow(
             icon: Icons.bar_chart_rounded,
             title: 'Rendement moyen',
-            value: '7.8 t/ha',
-            subtitle: '+0.4 vs moyenne région',
+            value: avgYield,
+            subtitle: 'moyenne recent',
+            onTap: () => onTap('Rendement'),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           _StatRow(
             icon: Icons.emoji_events_outlined,
             title: 'Meilleure parcelle',
-            value: 'Est',
-            subtitle: '9.1 t/ha · Maïs',
+            value: bestParcel,
+            subtitle: bestYield,
+            onTap: () => onTap('Meilleure parcelle'),
           ),
         ],
       ),
@@ -352,60 +474,71 @@ class _StatsCard extends StatelessWidget {
 }
 
 class _StatRow extends StatelessWidget {
-  const _StatRow({required this.icon, required this.title, required this.value, required this.subtitle});
+  const _StatRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String title;
   final String value;
   final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.neutreLight,
-            borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.neutreLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 18),
           ),
-          child: Icon(icon, color: AppColors.primary, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.neutreMedium,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.neutreMedium,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.neutreDark,
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.neutreDark,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppColors.neutreMedium,
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.neutreMedium,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -476,4 +609,104 @@ class _ActionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class ProfileViewData {
+  final String name;
+  final String initials;
+  final String roleLabel;
+  final String location;
+  final String badgeLabel;
+  final String parcelsCount;
+  final String totalAreaHa;
+  final String mainCrop;
+  final String predictionsCount;
+  final String avgYield;
+  final String bestParcelLabel;
+  final String bestParcelYield;
+  final String notificationsLabel;
+
+  ProfileViewData({
+    required this.name,
+    required this.initials,
+    required this.roleLabel,
+    required this.location,
+    required this.badgeLabel,
+    required this.parcelsCount,
+    required this.totalAreaHa,
+    required this.mainCrop,
+    required this.predictionsCount,
+    required this.avgYield,
+    required this.bestParcelLabel,
+    required this.bestParcelYield,
+    required this.notificationsLabel,
+  });
+
+  factory ProfileViewData.fromJson(Map<String, dynamic> json) {
+    final profile = (json['profile'] as Map<String, dynamic>?) ?? {};
+    final stats = (json['stats'] as Map<String, dynamic>?) ?? {};
+
+    final firstName = (profile['first_name'] as String?) ?? '';
+    final lastName = (profile['last_name'] as String?) ?? '';
+    final fullName = '${firstName.trim()} ${lastName.trim()}'.trim();
+    final name = fullName.isEmpty ? 'Utilisateur' : fullName;
+    final initials = _initialsFromName(name);
+
+    final roleLabel = _roleLabel(profile['role'] as String?);
+    final location = (stats['region'] as String?) ?? 'France';
+    final parcelsCount = '${stats['parcels_count'] ?? 0}';
+    final totalArea = stats['total_area_ha'];
+    final totalAreaHa = totalArea == null ? '0' : totalArea.toString();
+    final mainCrop = (stats['main_crop'] as String?) ?? 'Non renseigne';
+
+    final predictionsCount = '${stats['predictions_count'] ?? 0}';
+    final avgYield = stats['avg_yield_t_ha'] == null
+        ? '0 t/ha'
+        : '${stats['avg_yield_t_ha']} t/ha';
+    final bestParcel = (stats['best_parcel_name'] as String?) ?? 'Aucune';
+    final bestYield = stats['best_parcel_yield_t_ha'] == null
+        ? '0 t/ha'
+        : '${stats['best_parcel_yield_t_ha']} t/ha';
+
+    final notificationsCount = stats['notifications_unread'] ?? 0;
+    final notificationsLabel = '$notificationsCount actives';
+
+    return ProfileViewData(
+      name: name,
+      initials: initials,
+      roleLabel: roleLabel,
+      location: location,
+      badgeLabel: 'MEMBRE PREMIUM · depuis 2023',
+      parcelsCount: parcelsCount,
+      totalAreaHa: totalAreaHa,
+      mainCrop: mainCrop,
+      predictionsCount: predictionsCount,
+      avgYield: avgYield,
+      bestParcelLabel: bestParcel,
+      bestParcelYield: bestYield,
+      notificationsLabel: notificationsLabel,
+    );
+  }
+}
+
+String _roleLabel(String? role) {
+  switch (role) {
+    case 'agronomist':
+      return 'Agronome';
+    case 'admin':
+      return 'Admin';
+    case 'farmer':
+    default:
+      return 'Agriculteur';
+  }
+}
+
+String _initialsFromName(String name) {
+  final parts = name.trim().split(' ');
+  if (parts.length == 1) {
+    return parts.first.substring(0, 1).toUpperCase();
+  }
+  final first = parts.first.isNotEmpty ? parts.first[0] : '';
+  final last = parts.last.isNotEmpty ? parts.last[0] : '';
+  return (first + last).toUpperCase();
 }
