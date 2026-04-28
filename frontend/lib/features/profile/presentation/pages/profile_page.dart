@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:agrisense/core/theme/app_theme.dart';
 import 'package:agrisense/core/services/api_service.dart';
 import 'package:agrisense/core/services/profile_image_service.dart';
+import 'package:agrisense/core/services/auth_storage_service.dart';
 import 'package:agrisense/core/config/app_config.dart';
 import 'package:go_router/go_router.dart';
 
@@ -128,6 +129,13 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Future<void> _logout() async {
+    await AuthStorageService.clearAuth();
+    if (mounted) {
+      context.go('/login');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,6 +236,13 @@ class _ProfilePageState extends State<ProfilePage> {
                             trailing: data.notificationsLabel,
                             onTap: () => _showSnack('Notifications'),
                           ),
+                          const SizedBox(height: 10),
+                          _ActionTile(
+                            icon: Icons.logout,
+                            title: 'Déconnexion',
+                            onTap: _logout,
+                            isDestructive: true,
+                          ),
                         ],
                           ),
                         ),
@@ -267,6 +282,12 @@ class _HeaderCard extends StatelessWidget {
   final bool isEditing;
   final File? profileImage;
   final String? avatarUrl;
+
+  /// Check if the avatar URL is a valid image URL (not just initials)
+  bool _isValidImageUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -326,15 +347,26 @@ class _HeaderCard extends StatelessWidget {
                       onTap: onAvatarTap,
                       child: Stack(
                         children: [
-                          CircleAvatar(
-                            radius: 46,
-                            backgroundColor: Colors.white,
-                            backgroundImage: avatarUrl != null
-                                ? NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>
-                                : (profileImage != null
-                                    ? FileImage(profileImage!) as ImageProvider<Object>
-                                    : null),
-                            child: (avatarUrl == null && profileImage == null)
+                          Container(
+                            width: 92,
+                            height: 92,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(46),
+                              image: _isValidImageUrl(avatarUrl)
+                                  ? DecorationImage(
+                                      image: NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : (profileImage != null
+                                      ? DecorationImage(
+                                          image: FileImage(profileImage!) as ImageProvider<Object>,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null),
+                            ),
+                            alignment: Alignment.center,
+                            child: (!_isValidImageUrl(avatarUrl) && profileImage == null)
                                 ? Text(
                                     initials,
                                     style: const TextStyle(
@@ -698,15 +730,25 @@ class _StatRow extends StatelessWidget {
 }
 
 class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.icon, required this.title, required this.onTap, this.trailing});
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.trailing,
+    this.isDestructive = false,
+  });
 
   final IconData icon;
   final String title;
   final String? trailing;
   final VoidCallback onTap;
+  final bool isDestructive;
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDestructive ? const Color(0xFFD32F2F) : AppColors.neutreDark;
+    final iconColor = isDestructive ? const Color(0xFFD32F2F) : AppColors.neutreDark;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -729,19 +771,19 @@ class _ActionTile extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: AppColors.neutreLight,
+                color: isDestructive ? const Color(0xFFFFEBEE) : AppColors.neutreLight,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: AppColors.neutreDark, size: 18),
+              child: Icon(icon, color: iconColor, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.neutreDark,
+                  color: textColor,
                 ),
               ),
             ),
@@ -757,7 +799,7 @@ class _ActionTile extends StatelessWidget {
                   ),
                 ),
               ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.neutreMedium),
+            Icon(Icons.chevron_right_rounded, color: isDestructive ? iconColor : AppColors.neutreMedium),
           ],
         ),
       ),

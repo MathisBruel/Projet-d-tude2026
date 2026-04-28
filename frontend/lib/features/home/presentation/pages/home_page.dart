@@ -109,27 +109,32 @@ class _HomePageState extends State<HomePage> {
     _profileImage = ProfileImageService().getProfileImage();
 
     final cache = CacheService();
-    // Load from cache if available
+    // Load from cache if available and has parcels
     if (cache.isHomePageCacheValid()) {
       final cachedData = cache.getHomePageCache();
       if (cachedData != null) {
-        setState(() {
-          _isLoading = false;
-          _userName = cachedData['userName'] as String;
-          _userInitials = cachedData['userInitials'] as String;
-          _locationName = cachedData['locationName'] as String;
-          _locationLat = cachedData['locationLat'] as double?;
-          _locationLng = cachedData['locationLng'] as double?;
-          _parcels = cachedData['parcels'] as List<ParcelModel>;
-          _weather = cachedData['weather'] as _WeatherData?;
-          _alerts = cachedData['alerts'] as List<_AlertItem>;
-          _predictions = cachedData['predictions'] as List<_PredictionItem>;
-          _notifCount = cachedData['notifCount'] as int;
-        });
-        return;
+        final cachedParcels = cachedData['parcels'] as List<ParcelModel>;
+        // Only use cache if it has parcels
+        if (cachedParcels.isNotEmpty) {
+          setState(() {
+            _isLoading = false;
+            _userName = cachedData['userName'] as String;
+            _userInitials = cachedData['userInitials'] as String;
+            _locationName = cachedData['locationName'] as String;
+            _locationLat = cachedData['locationLat'] as double?;
+            _locationLng = cachedData['locationLng'] as double?;
+            _parcels = cachedParcels;
+            _weather = cachedData['weather'] as _WeatherData?;
+            _alerts = cachedData['alerts'] as List<_AlertItem>;
+            _predictions = cachedData['predictions'] as List<_PredictionItem>;
+            _notifCount = cachedData['notifCount'] as int;
+            _avatarUrl = cachedData['avatarUrl'] as String?;
+          });
+          return;
+        }
       }
     }
-    // Load from API if cache is invalid
+    // Load from API if cache is invalid or empty
     _loadAll();
   }
 
@@ -155,18 +160,20 @@ class _HomePageState extends State<HomePage> {
       final fullName = '$firstName $lastName'.trim();
       final userName = fullName.isEmpty ? 'Agriculteur' : fullName;
       final userInitials = _initials(userName);
-      final notifCount = (stats['notifications_unread'] as int?) ?? 0;
+      var notifCount = (stats['notifications_unread'] as int?) ?? 0;
       final avatarUrl = (profile['avatar_url'] as String?);
 
       double? lat = (profile['location_lat'] as num?)?.toDouble();
       double? lng = (profile['location_lng'] as num?)?.toDouble();
       String locationName = (profile['location_name'] as String?) ?? '';
 
-      // ── Parse parcels ──────────────────────────────────────────────────
+      // ── Parse parcels (limit to 5 for performance) ──────────────────────────────────────────────────
       final parcelsData = (parcelsResp['data'] as List<dynamic>?) ?? [];
-      final parcels = parcelsData
+      final allParcels = parcelsData
           .map((p) => ParcelModel.fromJson(p as Map<String, dynamic>))
           .toList();
+      // Only display first 5 parcels on home page for performance
+      final parcels = allParcels.take(5).toList();
 
       // ── Fallback location: centroïde de la première parcelle ───────────
       if ((lat == null || lng == null) && parcels.isNotEmpty) {
@@ -187,18 +194,19 @@ class _HomePageState extends State<HomePage> {
         final cultureType =
             parcels.isNotEmpty ? parcels.first.cultureType : null;
 
-        final secondaryResults = await Future.wait([
-          ApiService.getWeather(lat, lng),
-          ApiService.getWeatherAlerts(lat: lat, lng: lng, cultureType: cultureType),
-          ApiService.getPredictions(limit: 5),
-        ]);
+        // Load ONLY weather first (critical for display)
+        try {
+          final weatherResp = await ApiService.getWeather(lat, lng);
+          weather = _parseWeather(weatherResp);
+        } catch (e) {
+          debugPrint('Weather load failed: $e');
+        }
 
-        weather = _parseWeather(secondaryResults[0]);
-        alerts = _parseAlerts(secondaryResults[1], parcels);
-        predictions = _parsePredictions(secondaryResults[2], parcels);
+        // Load alerts and predictions in background (non-blocking)
+        _loadSecondaryDataInBackground(lat, lng, cultureType, parcels);
       } else {
-        final predsResp = await ApiService.getPredictions(limit: 5);
-        predictions = _parsePredictions(predsResp, parcels);
+        // Load predictions if no location
+        _loadSecondaryDataInBackground(null, null, null, parcels);
       }
 
       if (mounted) {
@@ -216,19 +224,8 @@ class _HomePageState extends State<HomePage> {
           _notifCount = notifCount;
           _avatarUrl = avatarUrl;
         });
-        // Store in cache for persistence across page navigations
-        CacheService().setHomePageCache({
-          'userName': userName,
-          'userInitials': userInitials,
-          'locationName': locationName.isEmpty ? 'France' : locationName,
-          'locationLat': lat,
-          'locationLng': lng,
-          'parcels': parcels,
-          'weather': weather,
-          'alerts': alerts,
-          'predictions': predictions,
-          'notifCount': notifCount,
-        });
+        // Store core data in cache immediately (weather, parcels, profile)
+        _updateCacheWithCurrentData(userName, userInitials, locationName.isEmpty ? 'France' : locationName, lat, lng, parcels, weather, alerts, predictions, notifCount, avatarUrl);
       }
     } catch (_) {
       if (mounted) {
@@ -239,6 +236,73 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+  }
+
+  /// Load alerts and predictions in background (non-blocking)
+  void _loadSecondaryDataInBackground(
+    double? lat,
+    double? lng,
+    String? cultureType,
+    List<ParcelModel> parcels,
+  ) {
+    // Fire and forget - load data in background
+    Future.wait([
+      if (lat != null && lng != null)
+        ApiService.getWeatherAlerts(lat: lat, lng: lng, cultureType: cultureType)
+            .then((resp) {
+          if (mounted) {
+            setState(() {
+              _alerts = _parseAlerts(resp, parcels);
+            });
+            // Update cache with new alerts
+            _updateCacheWithCurrentData(_userName, _userInitials, _locationName, _locationLat, _locationLng, _parcels, _weather, _alerts, _predictions, _notifCount, _avatarUrl);
+          }
+        }).catchError((_) {}),
+      ApiService.getPredictions(limit: 5).then((resp) {
+        if (mounted) {
+          setState(() {
+            _predictions = _parsePredictions(resp, parcels);
+          });
+          // Update cache with new predictions
+          _updateCacheWithCurrentData(_userName, _userInitials, _locationName, _locationLat, _locationLng, _parcels, _weather, _alerts, _predictions, _notifCount, _avatarUrl);
+        }
+      }).catchError((_) {}),
+      if (lat != null && lng != null)
+        ApiService.scanAlerts()
+            .then((resp) {
+          // Alerts already loaded, just update notification count if needed
+        })
+            .catchError((_) {}),
+    ]);
+  }
+
+  /// Helper to update cache with current data
+  void _updateCacheWithCurrentData(
+    String userName,
+    String userInitials,
+    String locationName,
+    double? locationLat,
+    double? locationLng,
+    List<ParcelModel> parcels,
+    _WeatherData? weather,
+    List<_AlertItem> alerts,
+    List<_PredictionItem> predictions,
+    int notifCount,
+    String? avatarUrl,
+  ) {
+    CacheService().setHomePageCache({
+      'userName': userName,
+      'userInitials': userInitials,
+      'locationName': locationName,
+      'locationLat': locationLat,
+      'locationLng': locationLng,
+      'parcels': parcels,
+      'weather': weather,
+      'alerts': alerts,
+      'predictions': predictions,
+      'notifCount': notifCount,
+      'avatarUrl': avatarUrl,
+    });
   }
 
   // ── Parsers ──────────────────────────────────────────────────────────────
@@ -340,6 +404,24 @@ class _HomePageState extends State<HomePage> {
           sideColor: const Color(0xFF1976D2),
           titleColor: const Color(0xFF1976D2),
         );
+      case 'HEAT_WAVE':
+        return _AlertItem(
+          emoji: '🔥',
+          title: 'Canicule',
+          subtitle: '$parcelName · $shortDate',
+          bgColor: const Color(0xFFFDECEC),
+          sideColor: AppColors.error,
+          titleColor: AppColors.error,
+        );
+      case 'IRRIGATION_NEEDED':
+        return _AlertItem(
+          emoji: '💧',
+          title: 'Irrigation requise',
+          subtitle: '$parcelName · $shortDate',
+          bgColor: const Color(0xFFE3F2FD),
+          sideColor: const Color(0xFF0277BD),
+          titleColor: const Color(0xFF0277BD),
+        );
       default:
         if (severity == 'HIGH') {
           return _AlertItem(
@@ -353,13 +435,34 @@ class _HomePageState extends State<HomePage> {
         }
         return _AlertItem(
           emoji: '✓',
-          title: 'Info météo',
+          title: 'Info meteo',
           subtitle: '$parcelName · $shortDate',
           bgColor: AppColors.surfacePrimary,
           sideColor: AppColors.success,
           titleColor: AppColors.success,
         );
     }
+  }
+
+  _AlertItem _persistedAlertToItem(Map<String, dynamic> alert) {
+    final type = (alert['type'] as String? ?? '').toUpperCase();
+    final severity = alert['severity'] as String? ?? 'info';
+    final message = alert['message'] as String? ?? '';
+
+    // Extraire le nom de parcelle du message [NomParcelle] ...
+    String parcelName = 'Parcelle';
+    final bracketMatch = RegExp(r'\[(.+?)\]').firstMatch(message);
+    if (bracketMatch != null) {
+      parcelName = bracketMatch.group(1)!;
+    }
+
+    final severityMap = {'critical': 'HIGH', 'warning': 'MEDIUM', 'info': 'LOW'};
+
+    return _alertItemFrom({
+      'type': type,
+      'severity': severityMap[severity] ?? 'MEDIUM',
+      'date': '',
+    }, []);
   }
 
   List<_PredictionItem> _parsePredictions(
@@ -795,6 +898,12 @@ class _DashboardHeader extends StatelessWidget {
   final File? profileImage;
   final String? avatarUrl;
 
+  /// Check if the avatar URL is a valid image URL (not just initials)
+  bool _isValidImageUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -840,7 +949,7 @@ class _DashboardHeader extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(14),
-                image: avatarUrl != null
+                image: _isValidImageUrl(avatarUrl)
                     ? DecorationImage(
                         image: NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>,
                         fit: BoxFit.cover,
@@ -853,7 +962,7 @@ class _DashboardHeader extends StatelessWidget {
                         : null),
               ),
               alignment: Alignment.center,
-              child: (avatarUrl == null && profileImage == null)
+              child: (!_isValidImageUrl(avatarUrl) && profileImage == null)
                   ? Text(
                       initials.isEmpty ? 'A' : initials,
                       style: const TextStyle(

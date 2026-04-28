@@ -56,6 +56,7 @@ def _post_to_response(db, post_data, include_replies=False):
         "author_name": _format_user_name(author),
         "author_role": _format_user_role(author),
         "author_location": _user_location(db, post_data.get('user_id')),
+        "author_avatar_url": author.get('avatar_url') if author else None,
     }
 
     if include_replies:
@@ -65,6 +66,7 @@ def _post_to_response(db, post_data, include_replies=False):
             enriched_replies.append({
                 "author_name": _format_user_name(reply_user),
                 "author_role": _format_user_role(reply_user),
+                "author_avatar_url": reply_user.get('avatar_url') if reply_user else None,
                 "content": reply.get('content'),
                 "created_at": reply.get('created_at').isoformat() if reply.get('created_at') else None,
             })
@@ -79,6 +81,13 @@ def list_posts():
     db = get_db()
     tag = request.args.get('tag')
     search = request.args.get('search')
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 10, type=int)
+
+    # Validate pagination params
+    page = max(1, page)
+    limit = min(50, max(1, limit))
+
     query = {}
 
     if tag and tag.lower() != 'tous':
@@ -98,10 +107,18 @@ def list_posts():
         else:
             query = search_query
 
-    posts = list(db.posts.find(query).sort("created_at", -1))
+    skip = (page - 1) * limit
+    total = db.posts.count_documents(query)
+    posts = list(db.posts.find(query).sort("created_at", -1).skip(skip).limit(limit))
     response_posts = [_post_to_response(db, post) for post in posts]
 
-    return jsonify({"posts": response_posts}), 200
+    return jsonify({
+        "posts": response_posts,
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "has_more": skip + limit < total
+    }), 200
 
 
 @community_bp.route('/posts/<post_id>', methods=['GET'])

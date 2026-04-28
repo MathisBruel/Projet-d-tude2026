@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 from ..database import get_db
 from ..utils.auth_utils import jwt_required
-from ..services import weather_service, ml_service
+from ..services import weather_service, ml_service, gemini_service
 
 predictions_bp = Blueprint("predictions", __name__)
 
@@ -70,13 +70,45 @@ def predict():
         # ────────────────────────────────────────────────────────────────────
         return jsonify({"error": f"Erreur modèle ML : {ml_err}"}), 500
 
-    # ── Persistance MongoDB ──────────────────────────────────────────────────
+    # ── Actions récentes (30j) pour enrichir le commentaire Gemini ────────
     db  = get_db()
+    now = datetime.utcnow()
+
+    recent_actions = []
+    if data.get("parcel_id"):
+        since = now - timedelta(days=30)
+        actions_cursor = db.parcel_actions.find(
+            {"parcel_id": ObjectId(data["parcel_id"]), "date": {"$gte": since}},
+            sort=[("date", -1)], limit=5,
+        )
+        for a in actions_cursor:
+            recent_actions.append({
+                "action_type": a.get("action_type", ""),
+                "product_name": a.get("product_name", ""),
+                "quantity": a.get("quantity", ""),
+                "unit": a.get("unit", ""),
+            })
+
+    # ── Commentaire Gemini ──────────────────────────────────────────────────
+    gemini_comment = ""
+    try:
+        gemini_comment = gemini_service.generate_prediction_commentary(
+            culture_type=culture_type,
+            predicted_yield=result["predicted_yield_t_ha"],
+            confidence=result["confidence_pct"],
+            weather={"avg_temp_c": avg_temp_c, "rainfall_mm": rainfall_mm},
+            actions=recent_actions,
+        )
+    except Exception:
+        pass
+
+    # ── Persistance MongoDB ──────────────────────────────────────────────────
     doc = {
         "user_id":             ObjectId(request.user_id),
         "parcel_id":           ObjectId(data["parcel_id"]) if data.get("parcel_id") else None,
         "culture_type":        culture_type,
-        "date":                datetime.utcnow(),
+        "date":                now,
+        "requested_at":        now,
         "weather_data": {
             "source":          weather_src,
             "avg_temp_c":      avg_temp_c,
@@ -85,7 +117,8 @@ def predict():
         "predicted_yield_t_ha": result["predicted_yield_t_ha"],
         "confidence_pct":       result["confidence_pct"],
         "model":                result["model"],
-        "created_at":           datetime.utcnow(),
+        "gemini_comment":       gemini_comment,
+        "created_at":           now,
     }
     inserted = db.predictions.insert_one(doc)
 
@@ -98,6 +131,7 @@ def predict():
                 "avg_temp_c":  avg_temp_c,
                 "rainfall_mm": rainfall_mm,
             },
+            "gemini_comment": gemini_comment,
         }
     }), 200
 

@@ -220,7 +220,10 @@ class _DiscussionHeader extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [
-          _Avatar(initials: _initialsFromName(post.authorName)),
+          _Avatar(
+            initials: _initialsFromName(post.authorName),
+            avatarUrl: post.authorAvatarUrl,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -427,7 +430,11 @@ class _ReplyCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Avatar(initials: _initialsFromName(reply.authorName), size: 36),
+            _Avatar(
+              initials: _initialsFromName(reply.authorName),
+              size: 36,
+              avatarUrl: reply.avatarUrl,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -648,24 +655,36 @@ class _IconPillButton extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials, this.size = 40});
+  const _Avatar({required this.initials, this.size = 40, this.avatarUrl});
 
   final String initials;
   final double size;
+  final String? avatarUrl;
+
+  /// Check if the avatar URL is a valid image URL (not just initials)
+  bool _isValidImageUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
 
   @override
   Widget build(BuildContext context) {
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: AppColors.surfacePrimary,
-      child: Text(
-        initials,
-        style: TextStyle(
-          fontSize: size * 0.35,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primary,
-        ),
-      ),
+      backgroundImage: _isValidImageUrl(avatarUrl)
+          ? NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>
+          : null,
+      child: (!_isValidImageUrl(avatarUrl))
+          ? Text(
+              initials,
+              style: TextStyle(
+                fontSize: size * 0.35,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            )
+          : null,
     );
   }
 }

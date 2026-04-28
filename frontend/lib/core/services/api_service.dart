@@ -141,10 +141,18 @@ class ApiService {
   }
 
   /// Récupère les posts de la communauté
-  static Future<Map<String, dynamic>> getCommunityPosts({String? tag, String? search}) async {
+  static Future<Map<String, dynamic>> getCommunityPosts({
+    String? tag,
+    String? search,
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
       final headers = await _authHeaders();
-      final queryParameters = <String, String>{};
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'limit': limit.toString(),
+      };
       if (tag != null && tag.isNotEmpty) {
         queryParameters['tag'] = tag;
       }
@@ -152,7 +160,7 @@ class ApiService {
         queryParameters['search'] = search;
       }
       final uri = Uri.parse('${AppConfig.apiUrl}/api/v1/community/posts')
-          .replace(queryParameters: queryParameters.isEmpty ? null : queryParameters);
+          .replace(queryParameters: queryParameters);
       final response = await http.get(uri, headers: headers);
       return jsonDecode(response.body);
     } catch (e) {
@@ -388,6 +396,139 @@ class ApiService {
       return jsonDecode(response.body);
     } catch (e) {
       return {'error': 'Erreur récupération cultures : $e'};
+    }
+  }
+
+  // ── Parcel Actions ─────────────────────────────────────────────────────
+
+  /// Enregistre une action agricole sur une parcelle
+  static Future<Map<String, dynamic>> createParcelAction(
+    String parcelId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/parcels/$parcelId/actions'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de l\'enregistrement de l\'action : $e'};
+    }
+  }
+
+  /// Liste les actions d'une parcelle
+  static Future<Map<String, dynamic>> getParcelActions(
+    String parcelId, {
+    int limit = 50,
+    int days = 90,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/parcels/$parcelId/actions?limit=$limit&days=$days'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la recuperation des actions : $e'};
+    }
+  }
+
+  /// Supprime une action
+  static Future<Map<String, dynamic>> deleteParcelAction(
+    String parcelId,
+    String actionId,
+  ) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.delete(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/parcels/$parcelId/actions/$actionId'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la suppression de l\'action : $e'};
+    }
+  }
+
+  // ── Tips IA ───────────────────────────────────────────────────────────────
+
+  /// Recupere les conseils IA pour une parcelle
+  static Future<Map<String, dynamic>> getParcelTips(String parcelId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/parcels/$parcelId/tips'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la recuperation des conseils : $e'};
+    }
+  }
+
+  // ── Alertes persistees ────────────────────────────────────────────────────
+
+  /// Recupere les alertes persistees de l'utilisateur
+  static Future<Map<String, dynamic>> getAlerts({
+    int limit = 30,
+    bool unreadOnly = false,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final unread = unreadOnly ? '&unread=true' : '';
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/alerts?limit=$limit$unread'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur alertes : $e'};
+    }
+  }
+
+  /// Lance un scan d'alertes sur toutes les parcelles
+  static Future<Map<String, dynamic>> scanAlerts() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/alerts/scan'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur scan alertes : $e'};
+    }
+  }
+
+  /// Marque une alerte comme lue
+  static Future<Map<String, dynamic>> markAlertRead(String alertId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/alerts/$alertId/read'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur : $e'};
+    }
+  }
+
+  /// Marque toutes les alertes comme lues
+  static Future<Map<String, dynamic>> markAllAlertsRead() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/alerts/read-all'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur : $e'};
     }
   }
 

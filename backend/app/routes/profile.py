@@ -141,9 +141,9 @@ def upload_avatar():
         return jsonify({"error": "Nom de fichier vide"}), 400
 
     # Vérifier l'extension
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-        return jsonify({"error": "Format de fichier non autorisé. Utilisez PNG, JPG, JPEG ou GIF"}), 400
+        return jsonify({"error": "Format de fichier non autorisé. Utilisez PNG, JPG, JPEG, GIF ou WebP"}), 400
 
     try:
         # Créer le dossier uploads s'il n'existe pas

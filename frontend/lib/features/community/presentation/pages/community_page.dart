@@ -19,39 +19,88 @@ class _CommunityPageState extends State<CommunityPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
-  late Future<List<CommunityPost>> _postsFuture;
+  late ScrollController _scrollController;
+
+  List<CommunityPost> _posts = [];
+  int _currentPage = 1;
+  bool _isLoading = false;
+  bool _hasMore = true;
+  bool _isInitialLoad = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _postsFuture = _loadPosts();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+    _loadMorePosts();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchDebounce?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<List<CommunityPost>> _loadPosts() async {
-    final response = await ApiService.getCommunityPosts(
-      tag: _activeTag == 'Tous' ? null : _activeTag,
-      search: _searchQuery.isEmpty ? null : _searchQuery,
-    );
-    if (response['error'] != null) {
-      throw Exception(response['error']);
+  void _onScroll() {
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (currentScroll >= maxScroll * 0.8 && !_isLoading && _hasMore) {
+      _loadMorePosts();
     }
-    final postsJson = (response['posts'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
-    return postsJson.map(CommunityPost.fromJson).toList();
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await ApiService.getCommunityPosts(
+        tag: _activeTag == 'Tous' ? null : _activeTag,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
+        page: _currentPage,
+      );
+
+      if (response['error'] != null) {
+        setState(() => _error = response['error']);
+        return;
+      }
+
+      final postsJson = (response['posts'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      final newPosts = postsJson.map(CommunityPost.fromJson).toList();
+
+      setState(() {
+        if (_isInitialLoad) {
+          _posts = newPosts;
+          _isInitialLoad = false;
+        } else {
+          _posts.addAll(newPosts);
+        }
+        _hasMore = response['has_more'] ?? false;
+        _currentPage++;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() => _error = 'Erreur de chargement');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _refreshPosts() {
     setState(() {
-      _postsFuture = _loadPosts();
+      _posts = [];
+      _currentPage = 1;
+      _hasMore = true;
+      _isInitialLoad = true;
+      _error = null;
     });
+    _loadMorePosts();
   }
 
   void _showSnack(String message) {
@@ -87,6 +136,7 @@ class _CommunityPageState extends State<CommunityPage> {
               child: RefreshIndicator(
                 onRefresh: () async => _refreshPosts(),
                 child: ListView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   children: [
                     _SearchBar(
@@ -94,10 +144,8 @@ class _CommunityPageState extends State<CommunityPage> {
                       onChanged: (value) {
                         _searchDebounce?.cancel();
                         _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-                          setState(() {
-                            _searchQuery = value.trim();
-                            _postsFuture = _loadPosts();
-                          });
+                          _searchQuery = value.trim();
+                          _refreshPosts();
                         });
                       },
                     ),
@@ -105,60 +153,63 @@ class _CommunityPageState extends State<CommunityPage> {
                     _FilterChips(
                       activeTag: _activeTag,
                       onFilterTap: (tag) {
-                        setState(() {
-                          _activeTag = tag;
-                          _postsFuture = _loadPosts();
-                        });
+                        _activeTag = tag;
+                        _refreshPosts();
                       },
                     ),
                     const SizedBox(height: 12),
-                    FutureBuilder<List<CommunityPost>>(
-                      future: _postsFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const _LoadingList();
-                        }
-                        if (snapshot.hasError) {
-                          return _EmptyState(
-                            title: 'Impossible de charger la communaute',
-                            subtitle: 'Verifiez votre connexion et reessayez.',
-                            onRetry: _refreshPosts,
-                          );
-                        }
-                        final posts = snapshot.data ?? [];
-                        if (posts.isEmpty) {
-                          return _EmptyState(
-                            title: _searchQuery.isEmpty
-                                ? 'Aucun post pour le moment'
-                                : 'Aucun resultat',
-                            subtitle: _searchQuery.isEmpty
-                                ? 'Soyez le premier a lancer une discussion.'
-                                : 'Essayez un autre mot-cle.',
-                            onRetry: _refreshPosts,
-                          );
-                        }
-                        return Column(
-                          children: posts
-                              .map((post) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _PostCard(
-                                      post: post,
-                                      onTap: () => context.push(
-                                        '/community/post/${post.id}',
-                                        extra: post,
-                                      ),
-                                      onTagTap: (tag) => _showSnack('Tag: $tag'),
-                                      onReplyTap: () => context.push(
-                                        '/community/post/${post.id}',
-                                        extra: post,
-                                      ),
-                                      onLikeTap: () => _likePost(post.id),
-                                    ),
-                                  ))
-                              .toList(),
-                        );
-                      },
-                    ),
+                    if (_isInitialLoad && _posts.isEmpty)
+                      const _LoadingList()
+                    else if (_error != null && _posts.isEmpty)
+                      _EmptyState(
+                        title: 'Impossible de charger la communaute',
+                        subtitle: 'Verifiez votre connexion et reessayez.',
+                        onRetry: _refreshPosts,
+                      )
+                    else if (_posts.isEmpty)
+                      _EmptyState(
+                        title: _searchQuery.isEmpty ? 'Aucun post pour le moment' : 'Aucun resultat',
+                        subtitle: _searchQuery.isEmpty
+                            ? 'Soyez le premier a lancer une discussion.'
+                            : 'Essayez un autre mot-cle.',
+                        onRetry: _refreshPosts,
+                      )
+                    else ...[
+                      ..._posts.map((post) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _PostCard(
+                              post: post,
+                              onTap: () => context.push(
+                                '/community/post/${post.id}',
+                                extra: post,
+                              ),
+                              onTagTap: (tag) => _showSnack('Tag: $tag'),
+                              onReplyTap: () => context.push(
+                                '/community/post/${post.id}',
+                                extra: post,
+                              ),
+                              onLikeTap: () => _likePost(post.id),
+                            ),
+                          )),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      if (!_hasMore && _posts.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Text(
+                              'Vous avez atteint la fin',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.neutreMedium,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -385,7 +436,10 @@ class _PostCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _Avatar(initials: _initialsFromName(post.authorName)),
+                _Avatar(
+                  initials: _initialsFromName(post.authorName),
+                  avatarUrl: post.authorAvatarUrl,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -714,23 +768,36 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials});
+  const _Avatar({required this.initials, this.avatarUrl, this.size = 40});
 
   final String initials;
+  final String? avatarUrl;
+  final double size;
+
+  /// Check if the avatar URL is a valid image URL (not just initials)
+  bool _isValidImageUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
 
   @override
   Widget build(BuildContext context) {
     return CircleAvatar(
-      radius: 20,
+      radius: size / 2,
       backgroundColor: AppColors.surfacePrimary,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primary,
-        ),
-      ),
+      backgroundImage: _isValidImageUrl(avatarUrl)
+          ? NetworkImage('${AppConfig.apiUrl}$avatarUrl') as ImageProvider<Object>
+          : null,
+      child: (!_isValidImageUrl(avatarUrl))
+          ? Text(
+              initials,
+              style: TextStyle(
+                fontSize: size * 0.35,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            )
+          : null,
     );
   }
 }

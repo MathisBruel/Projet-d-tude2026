@@ -4,6 +4,7 @@ class CommunityReply {
   final String timeAgo;
   final String message;
   final bool isExpert;
+  final String? avatarUrl;
 
   const CommunityReply({
     required this.authorName,
@@ -11,6 +12,7 @@ class CommunityReply {
     required this.timeAgo,
     required this.message,
     this.isExpert = false,
+    this.avatarUrl,
   });
 
   factory CommunityReply.fromJson(Map<String, dynamic> json) {
@@ -22,6 +24,7 @@ class CommunityReply {
       timeAgo: _formatTimeAgo(createdAt),
       message: (json['content'] as String?) ?? '',
       isExpert: _isExpertRole(role),
+      avatarUrl: json['author_avatar_url'] as String?,
     );
   }
 }
@@ -41,6 +44,7 @@ class CommunityPost {
   final List<CommunityReply> replies;
   final String? imageUrl;
   final bool? likedByMe;
+  final String? authorAvatarUrl;
 
   const CommunityPost({
     required this.id,
@@ -57,6 +61,7 @@ class CommunityPost {
     required this.replies,
     required this.imageUrl,
     this.likedByMe = false,
+    this.authorAvatarUrl,
   });
 
   factory CommunityPost.fromJson(Map<String, dynamic> json) {
@@ -83,6 +88,7 @@ class CommunityPost {
       replies: replies,
       imageUrl: json['image_url'] as String?,
       likedByMe: json['liked_by_me'] == true,
+      authorAvatarUrl: json['author_avatar_url'] as String?,
     );
   }
 }
