@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from ..services import weather_service
-from ..utils.auth_utils import jwt_required
+from ..services.auth_service import jwt_required
 
 weather_bp = Blueprint("weather", __name__, url_prefix="/api/v1/weather")
 
@@ -43,17 +43,9 @@ def _wmo_to_condition(code: int) -> str:
 @weather_bp.route("", methods=["GET"])
 @jwt_required
 def get_weather():
-    """
-    Retourne la météo actuelle + prévisions 7 jours.
-
-    Query params :
-        lat  (float) — latitude GPS
-        lng  (float) — longitude GPS
-        days (int)   — horizon de prévision (1–7, défaut 7)
-    """
     try:
-        lat  = float(request.args["lat"])
-        lng  = float(request.args["lng"])
+        lat = float(request.args["lat"])
+        lng = float(request.args["lng"])
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "Paramètres lat et lng requis (float)"}), 400
 
@@ -65,16 +57,14 @@ def get_weather():
         return jsonify({"error": f"Open-Meteo indisponible : {exc}"}), 503
 
     current = raw.get("current_weather", {})
-    daily   = raw.get("daily", {})
-    hourly  = raw.get("hourly", {})
+    daily = raw.get("daily", {})
+    hourly = raw.get("hourly", {})
 
-    # Humidité : première valeur horaire disponible
     humidity = None
     humidity_list = hourly.get("relative_humidity_2m", [])
     if humidity_list:
         humidity = humidity_list[0]
 
-    # Ressenti : première valeur horaire apparent_temperature
     feels_like = None
     feels_list = hourly.get("apparent_temperature", [])
     if feels_list:
@@ -85,21 +75,21 @@ def get_weather():
     return jsonify({
         "data": {
             "current": {
-                "temp_c":        round(current.get("temperature", 0), 1),
-                "feels_like_c":  feels_like,
+                "temp_c": round(current.get("temperature", 0), 1),
+                "feels_like_c": feels_like,
                 "windspeed_kmh": round(current.get("windspeed", 0), 1),
-                "humidity_pct":  humidity,
-                "condition":     _wmo_to_condition(wmo),
-                "weathercode":   wmo,
-                "is_day":        current.get("is_day", 1),
+                "humidity_pct": humidity,
+                "condition": _wmo_to_condition(wmo),
+                "weathercode": wmo,
+                "is_day": current.get("is_day", 1),
             },
             "daily": {
-                "dates":            daily.get("time", []),
-                "temp_max":         daily.get("temperature_2m_max", []),
-                "temp_min":         daily.get("temperature_2m_min", []),
+                "dates": daily.get("time", []),
+                "temp_max": daily.get("temperature_2m_max", []),
+                "temp_min": daily.get("temperature_2m_min", []),
                 "precipitation_mm": daily.get("precipitation_sum", []),
-                "weathercodes":     daily.get("weathercode", []),
-                "windspeed_max":    daily.get("windspeed_10m_max", []),
+                "weathercodes": daily.get("weathercode", []),
+                "windspeed_max": daily.get("windspeed_10m_max", []),
             },
         }
     }), 200

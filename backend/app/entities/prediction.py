@@ -1,14 +1,15 @@
 from datetime import datetime
 from bson import ObjectId
 
+
 class Prediction:
-    def __init__(self, parcel_id, user_id, weather_data=None, predicted_yield=None, confidence=None, recommendations=None, gemini_io=None, _id=None, requested_at=None):
+    def __init__(self, parcel_id, user_id, weather_data=None, predicted_yield=None,
+                 confidence=None, recommendations=None, gemini_io=None,
+                 _id=None, requested_at=None):
         self._id = ObjectId(_id) if _id else None
         self.parcel_id = ObjectId(parcel_id) if parcel_id else None
         self.user_id = ObjectId(user_id) if user_id else None
         self.requested_at = requested_at or datetime.utcnow()
-        
-        # Données météo au moment de la demande
         self.weather_data = weather_data or {
             "temp_avg": 0.0,
             "precip_mm": 0.0,
@@ -16,30 +17,10 @@ class Prediction:
             "sunshine_h": 0.0,
             "radiation_kwh_m2": 0.0
         }
-        
-        # Résultats de l'IA
         self.predicted_yield_t_ha = predicted_yield
         self.confidence_pct = confidence
         self.recommendations = recommendations or []
-        
-        # Traces Gemini
-        self.gemini_io = gemini_io or {
-            "prompt": "",
-            "response": ""
-        }
-
-    def to_dict(self):
-        return {
-            "_id": str(self._id) if self._id else None,
-            "parcel_id": str(self.parcel_id) if self.parcel_id else None,
-            "user_id": str(self.user_id) if self.user_id else None,
-            "requested_at": self.requested_at.isoformat() if isinstance(self.requested_at, datetime) else self.requested_at,
-            "weather_data": self.weather_data,
-            "predicted_yield_t_ha": self.predicted_yield_t_ha,
-            "confidence_pct": self.confidence_pct,
-            "recommendations": self.recommendations,
-            "gemini_io": self.gemini_io
-        }
+        self.gemini_io = gemini_io or {"prompt": "", "response": ""}
 
     def to_mongo(self):
         data = {

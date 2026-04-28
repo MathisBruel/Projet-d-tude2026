@@ -13,16 +13,17 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     CORS(app)
 
-    from .routes.health import health_bp
-    from .routes.auth import auth_bp
-    from .routes.parcels import parcels_bp
-    from .routes.community import community_bp
-    from .routes.profile import profile_bp
-    from .routes.predictions import predictions_bp
-    from .routes.alerts import alerts_bp
-    from .routes.weather import weather_bp
-    from .routes.parcel_actions import parcel_actions_bp
-    from .routes.tips import tips_bp
+    from .controllers.health_controller import health_bp
+    from .controllers.auth_controller import auth_bp
+    from .controllers.parcel_controller import parcels_bp
+    from .controllers.community_controller import community_bp
+    from .controllers.profile_controller import profile_bp
+    from .controllers.prediction_controller import predictions_bp
+    from .controllers.alert_controller import alerts_bp
+    from .controllers.weather_controller import weather_bp
+    from .controllers.parcel_action_controller import parcel_actions_bp
+    from .controllers.tips_controller import tips_bp
+
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(parcels_bp, url_prefix='/api/v1/parcels')
