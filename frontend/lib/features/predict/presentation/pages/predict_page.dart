@@ -3,6 +3,7 @@ import 'package:agrisense/core/theme/app_theme.dart';
 import 'package:agrisense/core/services/api_service.dart';
 import 'package:agrisense/features/shared/widgets/bottom_nav_bar.dart';
 import 'package:agrisense/features/map/data/models/parcel_model.dart';
+import 'package:agrisense/features/predict/presentation/pages/prediction_detail_page.dart';
 
 class PredictPage extends StatefulWidget {
   const PredictPage({Key? key}) : super(key: key);
@@ -435,24 +436,31 @@ class _PredictPageState extends State<PredictPage> {
 
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PredictionDetailPage(prediction: result),
             ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          child: Column(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Row(
@@ -512,6 +520,7 @@ class _PredictPageState extends State<PredictPage> {
                 ),
               ],
             ],
+          ),
           ),
         ),
         if (geminiComment.isNotEmpty) ...[
@@ -899,59 +908,67 @@ class _PredictPageState extends State<PredictPage> {
       } catch (_) {}
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PredictionDetailPage(prediction: prediction),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.surfacePrimary,
-              borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.surfacePrimary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.grass_rounded, color: AppColors.primary, size: 20),
             ),
-            child: const Icon(Icons.grass_rounded, color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    culture,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  if (formattedDate.isNotEmpty)
+                    Text(
+                      formattedDate,
+                      style: const TextStyle(color: AppColors.neutreMedium, fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  culture,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                if (formattedDate.isNotEmpty)
-                  Text(
-                    formattedDate,
-                    style: const TextStyle(color: AppColors.neutreMedium, fontSize: 12),
+                  '${yield_.toStringAsFixed(2)} t/ha',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppColors.primary,
                   ),
+                ),
+                Text(
+                  '$confidence% confiance',
+                  style: const TextStyle(color: AppColors.neutreMedium, fontSize: 11),
+                ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${yield_.toStringAsFixed(2)} t/ha',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: AppColors.primary,
-                ),
-              ),
-              Text(
-                '$confidence% confiance',
-                style: const TextStyle(color: AppColors.neutreMedium, fontSize: 11),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

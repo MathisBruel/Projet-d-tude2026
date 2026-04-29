@@ -12,6 +12,7 @@ import 'package:agrisense/features/community/presentation/pages/community_page.d
 import 'package:agrisense/features/community/presentation/pages/community_detail_page.dart';
 import 'package:agrisense/features/community/presentation/pages/community_create_page.dart';
 import 'package:agrisense/features/profile/presentation/pages/profile_page.dart';
+import 'package:agrisense/features/admin/presentation/pages/admin_page.dart';
 
 class AppRouter {
   static final router = GoRouter(
@@ -67,6 +68,10 @@ class AppRouter {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminPage(),
       ),
     ],
   );

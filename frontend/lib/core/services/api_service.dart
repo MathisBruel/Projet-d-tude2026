@@ -555,4 +555,77 @@ class ApiService {
       return null;
     }
   }
+
+  // ── Admin ──────────────────────────────────────────────────────────────
+
+  /// Récupère les statistiques/KPIs pour le tableau de bord admin
+  static Future<Map<String, dynamic>> getAdminStats() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/admin/stats'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la récupération des statistiques : $e'};
+    }
+  }
+
+  /// Récupère la liste des utilisateurs pour l'admin
+  static Future<Map<String, dynamic>> getAdminUsers({int limit = 100, int offset = 0}) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/admin/users?limit=$limit&offset=$offset'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la récupération des utilisateurs : $e'};
+    }
+  }
+
+  /// Active/désactive un utilisateur
+  static Future<Map<String, dynamic>> toggleUserStatus(String userId, bool activate) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/admin/users/$userId/status'),
+        headers: headers,
+        body: jsonEncode({'is_active': activate}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors du changement de statut : $e'};
+    }
+  }
+
+  /// Récupère la liste des posts pour l'admin
+  static Future<Map<String, dynamic>> getAdminPosts({int limit = 100, int offset = 0}) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/admin/posts?limit=$limit&offset=$offset'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la récupération des posts : $e'};
+    }
+  }
+
+  /// Supprime un post
+  static Future<Map<String, dynamic>> deletePost(String postId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.delete(
+        Uri.parse('${AppConfig.apiUrl}/api/v1/admin/posts/$postId'),
+        headers: headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'error': 'Erreur lors de la suppression du post : $e'};
+    }
+  }
 }

@@ -23,6 +23,7 @@ def create_app():
     from .controllers.weather_controller import weather_bp
     from .controllers.parcel_action_controller import parcel_actions_bp
     from .controllers.tips_controller import tips_bp
+    from .controllers.admin_controller import admin_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(weather_bp)
     app.register_blueprint(parcel_actions_bp, url_prefix='/api/v1/parcels')
     app.register_blueprint(tips_bp, url_prefix='/api/v1/parcels')
+    app.register_blueprint(admin_bp)
 
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
